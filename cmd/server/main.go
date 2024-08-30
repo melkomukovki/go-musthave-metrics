@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 type MemStorage struct {
@@ -55,9 +56,16 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mType := r.PathValue("metricType")
-	mName := r.PathValue("metricName")
-	mValue := r.PathValue("metricValue")
+	path := strings.TrimPrefix(r.URL.Path, "/update/")
+	splitedPath := strings.Split(path, "/")
+	if len(splitedPath) != 3 {
+		http.Error(w, "Invalid request", http.StatusNotFound)
+		return
+	}
+
+	mType := splitedPath[0]
+	mName := splitedPath[1]
+	mValue := splitedPath[2]
 
 	if mType == "gauge" {
 		err := storage.AddGaugeMetric(mName, mValue)
@@ -79,10 +87,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/update/{metricType}/{metricName}/{metricValue}", metricsHandler)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "Bad request", http.StatusBadRequest)
-	})
+	mux.HandleFunc("/update/", metricsHandler)
 
 	err := http.ListenAndServe("0.0.0.0:8080", mux)
 	if err != nil {
