@@ -86,6 +86,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// Comment just for run tests again
 	mux := http.NewServeMux()
 	mux.HandleFunc("/update/", metricsHandler)
 
