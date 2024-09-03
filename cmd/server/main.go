@@ -45,7 +45,7 @@ var storage Storage = MemStorage{
 	CounterMetrics: make(map[string]int64),
 }
 
-func metricsHandler(w http.ResponseWriter, r *http.Request) {
+func MetricsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Use POST requests", http.StatusBadRequest)
 		return
@@ -83,13 +83,14 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unknown metric type. Use gauge or counter.", http.StatusBadRequest)
 		return
 	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 }
 
 func main() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/update/", metricsHandler)
+	mux.HandleFunc("/update/", MetricsHandler)
 
-	err := http.ListenAndServe("0.0.0.0:8080", mux)
+	err := http.ListenAndServe(":8080", mux)
 	if err != nil {
 		panic(err)
 	}
