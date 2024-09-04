@@ -2,9 +2,12 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
-	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 type MemStorage struct {
@@ -35,9 +38,39 @@ func (m MemStorage) AddCounterMetric(name, v string) error {
 	return nil
 }
 
+func (m MemStorage) GetGaugeMetric(name string) (float64, error) {
+	v, ok := m.GaugeMetrics[name]
+	if ok {
+		return v, nil
+	}
+	return 0, errors.New("value not found")
+}
+
+func (m MemStorage) GetCounterMetric(name string) (int64, error) {
+	v, ok := m.CounterMetrics[name]
+	if ok {
+		return v, nil
+	}
+	return 0, errors.New("value not found")
+}
+
+func (m MemStorage) GetAllMetrics() string {
+	res := ""
+	for k, v := range m.GaugeMetrics {
+		res += fmt.Sprintf("%s:%.6f\n", k, v)
+	}
+	for k, v := range m.CounterMetrics {
+		res += fmt.Sprintf("%s:%d\n", k, v)
+	}
+	return res
+}
+
 type Storage interface {
 	AddGaugeMetric(string, string) error
 	AddCounterMetric(string, string) error
+	GetGaugeMetric(string) (float64, error)
+	GetCounterMetric(string) (int64, error)
+	GetAllMetrics() string
 }
 
 var storage Storage = MemStorage{
@@ -45,53 +78,70 @@ var storage Storage = MemStorage{
 	CounterMetrics: make(map[string]int64),
 }
 
-func MetricsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Use POST requests", http.StatusBadRequest)
-		return
+func PostMetricHandler(c *gin.Context) {
+	if !slices.Contains(c.Request.Header["Content-Type"], "text/plain") {
+		c.String(http.StatusBadRequest, `No header "text/plain"`)
 	}
 
-	if r.Header.Get("Content-Type") != "text/plain" {
-		http.Error(w, "Content-type must be 'text/plain'", http.StatusBadRequest)
-		return
-	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/update/")
-	splitedPath := strings.Split(path, "/")
-	if len(splitedPath) != 3 {
-		http.Error(w, "Invalid request", http.StatusNotFound)
-		return
-	}
-
-	mType := splitedPath[0]
-	mName := splitedPath[1]
-	mValue := splitedPath[2]
+	mType := c.Params.ByName("mType")
+	mName := c.Params.ByName("mName")
+	mValue := c.Params.ByName("mValue")
 
 	if mType == "gauge" {
 		err := storage.AddGaugeMetric(mName, mValue)
 		if err != nil {
-			http.Error(w, "Cant add gauge metric", http.StatusBadRequest)
+			c.String(http.StatusBadRequest, "Can't add gauge metric: %s - %s", mName, mValue)
 			return
 		}
 	} else if mType == "counter" {
 		err := storage.AddCounterMetric(mName, mValue)
 		if err != nil {
-			http.Error(w, "Cant add counter metric", http.StatusBadRequest)
+			c.String(http.StatusBadRequest, "Can't add counter metric: %s - %s", mName, mValue)
 			return
 		}
 	} else {
-		http.Error(w, "Unknown metric type. Use gauge or counter.", http.StatusBadRequest)
+		c.String(http.StatusBadRequest, "Invalid metric type: %s", mType)
 		return
 	}
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	c.String(http.StatusOK, "OK")
+}
+
+func GetMetricHandler(c *gin.Context) {
+	mType := c.Params.ByName("mType")
+	mName := c.Params.ByName("mName")
+
+	if mType == "gauge" {
+		mV, err := storage.GetGaugeMetric(mName)
+		if err != nil {
+			c.String(http.StatusNotFound, "Can't found metric")
+			return
+		}
+		c.String(http.StatusOK, "%.6f", mV)
+		return
+	} else if mType == "counter" {
+		mV, err := storage.GetCounterMetric(mName)
+		if err != nil {
+			c.String(http.StatusNotFound, "Can't found metric")
+			return
+		}
+		c.String(http.StatusOK, "%d", mV)
+		return
+	}
+	c.String(http.StatusBadRequest, "Invalid metric type")
+}
+
+func ShowMetrics(c *gin.Context) {
+	res := storage.GetAllMetrics()
+	c.String(http.StatusOK, res)
 }
 
 func main() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/update/", MetricsHandler)
+	gin.ForceConsoleColor()
+	r := gin.Default()
 
-	err := http.ListenAndServe(":8080", mux)
-	if err != nil {
-		panic(err)
-	}
+	r.POST("/update/:mType/:mName/:mValue", PostMetricHandler)
+	r.GET("/value/:mType/:mName", GetMetricHandler)
+	r.GET("/", ShowMetrics)
+
+	r.Run(":8080")
 }
