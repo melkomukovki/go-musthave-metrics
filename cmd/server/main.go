@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -79,9 +78,10 @@ var storage Storage = MemStorage{
 }
 
 func PostMetricHandler(c *gin.Context) {
-	if !slices.Contains(c.Request.Header["Content-Type"], "text/plain") {
-		c.String(http.StatusBadRequest, `No header "text/plain"`)
-	}
+	// if !slices.Contains(c.Request.Header["Content-Type"], "text/plain") {
+	// 	c.String(http.StatusBadRequest, `No header "text/plain"`)
+	// 	return
+	// }
 
 	mType := c.Params.ByName("mType")
 	mName := c.Params.ByName("mName")
