@@ -56,7 +56,7 @@ func (m MemStorage) GetCounterMetric(name string) (int64, error) {
 func (m MemStorage) GetAllMetrics() string {
 	res := ""
 	for k, v := range m.GaugeMetrics {
-		res += fmt.Sprintf("%s:%.6f\n", k, v)
+		res += fmt.Sprintf("%s:%.3f\n", k, v)
 	}
 	for k, v := range m.CounterMetrics {
 		res += fmt.Sprintf("%s:%d\n", k, v)
@@ -78,11 +78,6 @@ var storage Storage = MemStorage{
 }
 
 func PostMetricHandler(c *gin.Context) {
-	// if !slices.Contains(c.Request.Header["Content-Type"], "text/plain") {
-	// 	c.String(http.StatusBadRequest, `No header "text/plain"`)
-	// 	return
-	// }
-
 	mType := c.Params.ByName("mType")
 	mName := c.Params.ByName("mName")
 	mValue := c.Params.ByName("mValue")
@@ -116,7 +111,7 @@ func GetMetricHandler(c *gin.Context) {
 			c.String(http.StatusNotFound, "Can't found metric")
 			return
 		}
-		c.String(http.StatusOK, "%.6f", mV)
+		c.String(http.StatusOK, "%.3f", mV)
 		return
 	} else if mType == "counter" {
 		mV, err := storage.GetCounterMetric(mName)
