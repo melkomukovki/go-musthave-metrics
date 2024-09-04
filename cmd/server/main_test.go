@@ -1,16 +1,24 @@
 package main
 
 import (
-	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-func TestStatusHandler(t *testing.T) {
+func SetUpRouter() *gin.Engine {
+	r := gin.Default()
+	r.POST("/update/:mType/:mName/:mValue", PostMetricHandler)
+	r.GET("/value/:mType/:mName", GetMetricHandler)
+	r.GET("/", ShowMetrics)
+	return r
+}
+
+func TestPostMetricHandler(t *testing.T) {
 	type want struct {
 		code        int
 		contentType string
@@ -26,7 +34,7 @@ func TestStatusHandler(t *testing.T) {
 			url:  "/update/counter/testCounter/123",
 			want: want{
 				code:        200,
-				contentType: "text/plain; charset=utf-8",
+				contentType: "text/plain",
 			},
 		},
 		{
@@ -34,34 +42,30 @@ func TestStatusHandler(t *testing.T) {
 			url:  "/update/wrongURL",
 			want: want{
 				code:        404,
-				contentType: "text/plain; charset=utf-8",
+				contentType: "text/plain",
 			},
 		},
 		{
-			name: "Request without metric name",
-			url:  "/update/counter/123/",
+			name: "Request invalid metric type",
+			url:  "/update/metric/testMetric/123",
 			want: want{
 				code:        400,
-				contentType: "text/plain; charset=utf-8",
+				contentType: "text/plain",
 			},
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			request := httptest.NewRequest(http.MethodPost, test.url, nil)
-			request.Header.Add("Content-Type", "text/plain")
+	r := SetUpRouter()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			// MetricsHandler(w, request)
-
-			res := w.Result()
-			defer res.Body.Close()
-
-			assert.Equal(t, test.want.code, res.StatusCode)
-			_, err := io.ReadAll(res.Body)
-
-			require.NoError(t, err)
-			assert.Equal(t, test.want.contentType, res.Header.Get("Content-Type"))
+			req, _ := http.NewRequest("POST", tt.url, nil)
+			req.Header.Add("Content-Type", "text/plain")
+			r.ServeHTTP(w, req)
+			assert.Equal(t, tt.want.code, w.Code)
+			assert.True(t, strings.Contains(w.Header().Get("Content-Type"), tt.want.contentType))
 		})
 	}
+
 }
