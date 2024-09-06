@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"math/rand/v2"
@@ -24,12 +25,9 @@ type CounterMetric struct {
 }
 
 var (
-	pollInterval   int64 = 2
-	reportInterval int64 = 10
 	pollCounter    int64 = 0
 	counterMetrics []CounterMetric
 	gaugeMetrics   []GaugeMetric
-	urlServer      string = "http://localhost:8080"
 )
 
 func getGaugeMetrics(ar *[]GaugeMetric) {
@@ -77,7 +75,7 @@ func getCounterMetrics(ar *[]CounterMetric) {
 	*ar = newAr
 }
 
-func updateMetrics() {
+func updateMetrics(pollInterval int) {
 	for {
 		pollCounter++
 		getCounterMetrics(&counterMetrics)
@@ -86,10 +84,11 @@ func updateMetrics() {
 	}
 }
 
-func sendMetrics(c *resty.Client) {
+func sendMetrics(c *resty.Client, url string, reportInterval int) {
+	url = "http://" + url
 	for {
 		for _, v := range gaugeMetrics {
-			url := fmt.Sprintf("%s/update/gauge/%s/%.6f", urlServer, v.Name, v.Value)
+			url := fmt.Sprintf("%s/update/gauge/%s/%.6f", url, v.Name, v.Value)
 			resp, err := c.R().
 				SetHeader("Content-Type", "text/plain").
 				Post(url)
@@ -100,7 +99,7 @@ func sendMetrics(c *resty.Client) {
 		}
 
 		for _, v := range counterMetrics {
-			url := fmt.Sprintf("%s/update/counter/%s/%d", urlServer, v.Name, v.Value)
+			url := fmt.Sprintf("%s/update/counter/%s/%d", url, v.Name, v.Value)
 			resp, err := c.R().
 				SetHeader("Content-Type", "text/plain").
 				Post(url)
@@ -115,13 +114,19 @@ func sendMetrics(c *resty.Client) {
 }
 
 func main() {
+	fullAddress := flag.String("a", "localhost:8080", "Server address and port")
+	reportInterval := flag.Int("r", 10, "Report interval (sec)")
+	pollInterval := flag.Int("p", 2, "Poll metric interval (sec)")
+
+	flag.Parse()
+
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	client := resty.New()
 
-	go updateMetrics()
-	go sendMetrics(client)
+	go updateMetrics(*pollInterval)
+	go sendMetrics(client, *fullAddress, *reportInterval)
 
 	<-sigs
 }

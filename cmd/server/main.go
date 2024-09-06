@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -131,6 +132,9 @@ func ShowMetrics(c *gin.Context) {
 }
 
 func main() {
+	fullAddres := flag.String("a", "localhost:8080", "Server address and port")
+	flag.Parse()
+
 	gin.ForceConsoleColor()
 	r := gin.Default()
 
@@ -138,5 +142,5 @@ func main() {
 	r.GET("/value/:mType/:mName", GetMetricHandler)
 	r.GET("/", ShowMetrics)
 
-	r.Run(":8080")
+	r.Run(*fullAddres)
 }
