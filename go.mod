@@ -3,6 +3,7 @@ module github.com/melkomukovki/go-musthave-metrics
 go 1.22.5
 
 require (
+	github.com/caarlos0/env/v6 v6.10.1
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-resty/resty/v2 v2.14.0
 	github.com/stretchr/testify v1.9.0

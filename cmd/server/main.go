@@ -2,12 +2,13 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/melkomukovki/go-musthave-metrics/internal/config"
 )
 
 type MemStorage struct {
@@ -112,7 +113,9 @@ func GetMetricHandler(c *gin.Context) {
 			c.String(http.StatusNotFound, "Can't found metric")
 			return
 		}
-		c.String(http.StatusOK, "%.3f", mV)
+		fV := fmt.Sprintf("%.3f", mV)
+		fV = strings.TrimRight(strings.TrimRight(fV, "0"), ".")
+		c.String(http.StatusOK, fV)
 		return
 	} else if mType == "counter" {
 		mV, err := storage.GetCounterMetric(mName)
@@ -132,8 +135,7 @@ func ShowMetrics(c *gin.Context) {
 }
 
 func main() {
-	fullAddres := flag.String("a", "localhost:8080", "Server address and port")
-	flag.Parse()
+	cfg := config.GetServerConfig()
 
 	gin.ForceConsoleColor()
 	r := gin.Default()
@@ -142,5 +144,5 @@ func main() {
 	r.GET("/value/:mType/:mName", GetMetricHandler)
 	r.GET("/", ShowMetrics)
 
-	r.Run(*fullAddres)
+	r.Run(cfg.Address)
 }

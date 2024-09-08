@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"math/rand/v2"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/melkomukovki/go-musthave-metrics/internal/config"
 )
 
 type GaugeMetric struct {
@@ -114,19 +114,16 @@ func sendMetrics(c *resty.Client, url string, reportInterval int) {
 }
 
 func main() {
-	fullAddress := flag.String("a", "localhost:8080", "Server address and port")
-	reportInterval := flag.Int("r", 10, "Report interval (sec)")
-	pollInterval := flag.Int("p", 2, "Poll metric interval (sec)")
-
-	flag.Parse()
+	cfg := config.GetClientConfig()
+	fmt.Println(cfg)
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	client := resty.New()
 
-	go updateMetrics(*pollInterval)
-	go sendMetrics(client, *fullAddress, *reportInterval)
+	go updateMetrics(cfg.PollInterval)
+	go sendMetrics(client, cfg.Address, cfg.ReportInterval)
 
 	<-sigs
 }
