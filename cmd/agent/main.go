@@ -115,7 +115,6 @@ func sendMetrics(c *resty.Client, url string, reportInterval int) {
 
 func main() {
 	cfg := config.GetClientConfig()
-	fmt.Println(cfg)
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
