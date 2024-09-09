@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -137,13 +136,7 @@ func TestGetMetricHandler(t *testing.T) {
 
 			assert.Equal(t, tt.want.code, w.Code)
 			assert.True(t, strings.Contains(w.Header().Get("Content-Type"), tt.want.contentType))
-
-			bB, err := io.ReadAll(w.Result().Body)
-			if err != nil {
-				panic(err)
-			}
-			defer w.Result().Body.Close()
-			assert.Equal(t, tt.want.content, string(bB))
+			assert.Equal(t, tt.want.content, w.Body.String())
 		})
 	}
 
