@@ -2,11 +2,16 @@ package config
 
 import (
 	"flag"
+	"log"
 
 	"github.com/caarlos0/env/v6"
 )
 
-var DefaultAddress = "localhost:8080"
+const (
+	DefaultAddress        = "localhost:8080"
+	DefaultPollInterval   = 2
+	DefaultReportInterval = 10
+)
 
 type ServerConfig struct {
 	Address string `env:"ADDRESS"`
@@ -18,34 +23,34 @@ type ClientConfig struct {
 	PollInterval   int    `env:"POLL_INTERVAL"`
 }
 
-func GetServerConfig() ServerConfig {
+func GetServerConfig() (ServerConfig, error) {
 	var cfg ServerConfig
 
 	if err := env.Parse(&cfg); err != nil {
-		panic(err)
+		return ServerConfig{}, err
 	}
 
 	if cfg.Address != "" {
-		return cfg
+		return cfg, nil
 	}
 
 	fullAddres := flag.String("a", DefaultAddress, "Server address and port")
 	flag.Parse()
 
 	cfg.Address = *fullAddres
-	return cfg
+	return cfg, nil
 }
 
-func GetClientConfig() ClientConfig {
+func GetClientConfig() (ClientConfig, error) {
 	var cfg ClientConfig
 
 	if err := env.Parse(&cfg); err != nil {
-		panic(err)
+		return ClientConfig{}, err
 	}
 
 	fullAddress := flag.String("a", "localhost:8080", "Server address and port")
-	reportInterval := flag.Int("r", 10, "Report interval (sec)")
-	pollInterval := flag.Int("p", 2, "Poll metric interval (sec)")
+	reportInterval := flag.Int("r", DefaultReportInterval, "Report interval (sec)")
+	pollInterval := flag.Int("p", DefaultPollInterval, "Poll metric interval (sec)")
 	flag.Parse()
 
 	if cfg.Address == "" {
@@ -58,5 +63,17 @@ func GetClientConfig() ClientConfig {
 		cfg.PollInterval = *pollInterval
 	}
 
-	return cfg
+	if cfg.PollInterval <= 0 || cfg.PollInterval > 100 {
+		log.Printf("Wrong value PollInterval: %d. Must be: 0 < PollInterval <= 100", cfg.PollInterval)
+		cfg.PollInterval = DefaultPollInterval
+		log.Printf("Set PollInterval to default value: %d", DefaultPollInterval)
+	}
+
+	if cfg.ReportInterval <= 0 || cfg.ReportInterval > 100 {
+		log.Printf("Wrong value ReportInterval: %d. Must be: 0 < ReportInterval <= 100", cfg.ReportInterval)
+		cfg.ReportInterval = DefaultReportInterval
+		log.Printf("Set ReportInterval to default value: %d", DefaultReportInterval)
+	}
+
+	return cfg, nil
 }

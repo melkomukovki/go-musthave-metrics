@@ -23,7 +23,7 @@ func TestPostMetricHandler(t *testing.T) {
 		want want
 	}{
 		{
-			name: "Positive test",
+			name: "Update counter metric",
 			url:  "/update/counter/testCounter/123",
 			want: want{
 				code:        200,
@@ -48,10 +48,7 @@ func TestPostMetricHandler(t *testing.T) {
 		},
 	}
 
-	var store storage.Storage = storage.MemStorage{
-		GaugeMetrics:   make(map[string]float64),
-		CounterMetrics: make(map[string]int64),
-	}
+	var store = storage.NewMemStorage()
 
 	r := server.NewServerRouter(store)
 
@@ -80,10 +77,7 @@ func TestGetMetricHandler(t *testing.T) {
 		"/update/gauge/testGauge/333.12345",
 	}
 
-	var store storage.Storage = storage.MemStorage{
-		GaugeMetrics:   make(map[string]float64),
-		CounterMetrics: make(map[string]int64),
-	}
+	var store = storage.NewMemStorage()
 
 	r := server.NewServerRouter(store)
 
@@ -93,7 +87,7 @@ func TestGetMetricHandler(t *testing.T) {
 		want want
 	}{
 		{
-			name: "Positive Counter GET",
+			name: "Get counter metric value",
 			url:  "/value/counter/testCounter",
 			want: want{
 				code:        200,
@@ -102,7 +96,7 @@ func TestGetMetricHandler(t *testing.T) {
 			},
 		},
 		{
-			name: "Positive Gauge GET",
+			name: "Get gauge metric value",
 			url:  "/value/gauge/testGauge",
 			want: want{
 				code:        200,
@@ -111,7 +105,7 @@ func TestGetMetricHandler(t *testing.T) {
 			},
 		},
 		{
-			name: "Negative GET",
+			name: "Get undefined metric",
 			url:  "/value/gauge/noMetric",
 			want: want{
 				code:        404,

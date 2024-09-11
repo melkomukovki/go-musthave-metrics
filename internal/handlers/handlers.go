@@ -15,22 +15,24 @@ func PostMetricHandler(store storage.Storage) gin.HandlerFunc {
 		mName := c.Params.ByName("mName")
 		mValue := c.Params.ByName("mValue")
 
-		if mType == "gauge" {
+		switch mType {
+		case "gauge":
 			err := store.AddGaugeMetric(mName, mValue)
 			if err != nil {
 				c.String(http.StatusBadRequest, "Can't add gauge metric: %s - %s", mName, mValue)
 				return
 			}
-		} else if mType == "counter" {
+		case "counter":
 			err := store.AddCounterMetric(mName, mValue)
 			if err != nil {
 				c.String(http.StatusBadRequest, "Can't add counter metric: %s - %s", mName, mValue)
 				return
 			}
-		} else {
+		default:
 			c.String(http.StatusBadRequest, "Invalid metric type: %s", mType)
 			return
 		}
+
 		c.String(http.StatusOK, "OK")
 	}
 	return fn

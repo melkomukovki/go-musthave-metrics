@@ -1,19 +1,21 @@
 package main
 
 import (
+	"log"
+
 	"github.com/gin-gonic/gin"
 	"github.com/melkomukovki/go-musthave-metrics/internal/config"
 	"github.com/melkomukovki/go-musthave-metrics/internal/server"
 	"github.com/melkomukovki/go-musthave-metrics/internal/storage"
 )
 
-var store storage.Storage = storage.MemStorage{
-	GaugeMetrics:   make(map[string]float64),
-	CounterMetrics: make(map[string]int64),
-}
+var store = storage.NewMemStorage()
 
 func main() {
-	cfg := config.GetServerConfig()
+	cfg, err := config.GetServerConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	gin.ForceConsoleColor()
 	r := server.NewServerRouter(store)

@@ -9,6 +9,13 @@ import (
 // Validate implimentation
 var _ Storage = MemStorage{}
 
+func NewMemStorage() *MemStorage {
+	return &MemStorage{
+		GaugeMetrics:   make(map[string]float64),
+		CounterMetrics: make(map[string]int64),
+	}
+}
+
 type MemStorage struct {
 	GaugeMetrics   map[string]float64
 	CounterMetrics map[string]int64
