@@ -105,10 +105,10 @@ func (a *Agent) getCounterMetrics() {
 }
 
 func (a *Agent) sendMetric(c *resty.Client, mType string, mName string, mValue interface{}) (int, error) {
-	fullUrl := fmt.Sprintf("http://%s/update/%s/%s/%v", a.config.Address, mType, mName, mValue)
+	fullURL := fmt.Sprintf("http://%s/update/%s/%s/%v", a.config.Address, mType, mName, mValue)
 	resp, err := c.R().
 		SetHeader("Content-Type", "text/plain").
-		Post(fullUrl)
+		Post(fullURL)
 	if err != nil {
 		return 0, err
 	}
