@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 
-	"github.com/gin-gonic/gin"
 	"github.com/melkomukovki/go-musthave-metrics/internal/config"
 	"github.com/melkomukovki/go-musthave-metrics/internal/server"
 	"github.com/melkomukovki/go-musthave-metrics/internal/storage"
@@ -17,7 +16,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	gin.ForceConsoleColor()
 	r := server.NewServerRouter(store)
 
 	r.Run(cfg.Address)
