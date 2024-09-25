@@ -110,7 +110,7 @@ func TestGetMetricHandler(t *testing.T) {
 			want: want{
 				code:        404,
 				contentType: "text/plain",
-				content:     "Can't found metric",
+				content:     "metric not found",
 			},
 		},
 	}

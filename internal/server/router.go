@@ -50,7 +50,9 @@ func NewServerRouter(store storage.Storage) *gin.Engine {
 	log.SetFormatter(&logrus.JSONFormatter{})
 	r.Use(LoggerMiddleware(log), gin.Recovery())
 
+	r.POST("/update/", handlers.PostMetricHandlerJSON(store))
 	r.POST("/update/:mType/:mName/:mValue", handlers.PostMetricHandler(store))
+	r.POST("/value/", handlers.GetMetricHandlerJSON(store))
 	r.GET("/value/:mType/:mName", handlers.GetMetricHandler(store))
 	r.GET("/", handlers.ShowMetrics(store))
 

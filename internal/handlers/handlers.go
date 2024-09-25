@@ -3,11 +3,45 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/melkomukovki/go-musthave-metrics/internal/storage"
 )
+
+func PostMetricHandlerJSON(store storage.Storage) gin.HandlerFunc {
+	fn := func(c *gin.Context) {
+		var v storage.Metrics
+		if err := c.BindJSON(&v); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": "Invaild payload",
+			})
+			return
+		}
+
+		err := store.AddMetric(v)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   true,
+				"message": err.Error(),
+			})
+			return
+		}
+
+		rM, err := store.GetMetric(v.MType, v.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   true,
+				"message": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, rM)
+	}
+	return fn
+}
 
 func PostMetricHandler(store storage.Storage) gin.HandlerFunc {
 	fn := func(c *gin.Context) {
@@ -16,16 +50,26 @@ func PostMetricHandler(store storage.Storage) gin.HandlerFunc {
 		mValue := c.Params.ByName("mValue")
 
 		switch mType {
-		case "gauge":
-			err := store.AddGaugeMetric(mName, mValue)
+		case storage.Gauge:
+			value, err := strconv.ParseFloat(mValue, 64)
 			if err != nil {
-				c.String(http.StatusBadRequest, "Can't add gauge metric: %s - %s", mName, mValue)
+				c.String(http.StatusBadRequest, "Can't convert value %s to float64", mValue)
+			}
+			metric := storage.Metrics{ID: mName, MType: mType, Value: &value}
+			err = store.AddMetric(metric)
+			if err != nil {
+				c.String(http.StatusBadRequest, "Can't add gauge metric: %s - %s. Error: %s", mName, mValue, err.Error())
 				return
 			}
-		case "counter":
-			err := store.AddCounterMetric(mName, mValue)
+		case storage.Counter:
+			value, err := strconv.ParseInt(mValue, 10, 64)
 			if err != nil {
-				c.String(http.StatusBadRequest, "Can't add counter metric: %s - %s", mName, mValue)
+				c.String(http.StatusBadRequest, "Can't convert value %s to int64", mValue)
+			}
+			metric := storage.Metrics{ID: mName, MType: mType, Delta: &value}
+			err = store.AddMetric(metric)
+			if err != nil {
+				c.String(http.StatusBadRequest, "Can't add counter metric: %s - %s. Error: %s", mName, mValue, err.Error())
 				return
 			}
 		default:
@@ -38,38 +82,70 @@ func PostMetricHandler(store storage.Storage) gin.HandlerFunc {
 	return fn
 }
 
+func GetMetricHandlerJSON(store storage.Storage) gin.HandlerFunc {
+	fn := func(c *gin.Context) {
+		var v storage.Metrics
+		if err := c.BindJSON(&v); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   true,
+				"message": "Invaild payload " + err.Error(),
+			})
+			return
+		}
+
+		res, err := store.GetMetric(v.MType, v.ID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   true,
+				"message": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, res)
+	}
+	return fn
+}
+
 func GetMetricHandler(store storage.Storage) gin.HandlerFunc {
 	fn := func(c *gin.Context) {
 		mType := c.Params.ByName("mType")
 		mName := c.Params.ByName("mName")
 
-		if mType == "gauge" {
-			mV, err := store.GetGaugeMetric(mName)
-			if err != nil {
-				c.String(http.StatusNotFound, "Can't found metric")
-				return
-			}
-			fV := fmt.Sprintf("%.3f", mV)
+		metric, err := store.GetMetric(mType, mName)
+		if err != nil {
+			c.String(http.StatusNotFound, err.Error())
+			return
+		}
+
+		switch metric.MType {
+		case storage.Gauge:
+			fV := fmt.Sprintf("%.3f", *metric.Value)
 			fV = strings.TrimRight(strings.TrimRight(fV, "0"), ".")
 			c.String(http.StatusOK, fV)
 			return
-		} else if mType == "counter" {
-			mV, err := store.GetCounterMetric(mName)
-			if err != nil {
-				c.String(http.StatusNotFound, "Can't found metric")
-				return
-			}
-			c.String(http.StatusOK, "%d", mV)
+		case storage.Counter:
+			c.String(http.StatusOK, "%d", *metric.Delta)
 			return
+		default:
+			c.String(http.StatusInternalServerError, "unexpected metric type from store")
 		}
-		c.String(http.StatusBadRequest, "Invalid metric type")
 	}
 	return fn
 }
 
 func ShowMetrics(store storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		res := store.GetAllMetrics()
-		c.String(http.StatusOK, res)
+		var result string = ""
+		metrics := store.GetAllMetrics()
+		for _, v := range metrics {
+			switch v.MType {
+			case storage.Gauge:
+				result += fmt.Sprintf("%s:%.3f\n", v.ID, *v.Value)
+			case storage.Counter:
+				result += fmt.Sprintf("%s:%d\n", v.ID, *v.Delta)
+			}
+		}
+		c.String(http.StatusOK, result)
 	}
 }
