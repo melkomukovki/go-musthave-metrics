@@ -136,7 +136,7 @@ func GetMetricHandler(store storage.Storage) gin.HandlerFunc {
 
 func ShowMetrics(store storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var result string = ""
+		var result string
 		metrics := store.GetAllMetrics()
 		for _, v := range metrics {
 			switch v.MType {
