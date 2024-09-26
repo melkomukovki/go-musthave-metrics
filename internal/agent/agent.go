@@ -43,7 +43,7 @@ func (a *Agent) GetReportInterval() int {
 	return a.config.ReportInterval
 }
 
-func (a *Agent) PollMetrics() {
+func (a *Agent) pollMetrics() {
 	a.addPollCounter()
 	var newAr []storage.Metrics
 	var rtm runtime.MemStats
@@ -112,7 +112,7 @@ func (a *Agent) PollMetrics() {
 	a.metrics = newAr
 }
 
-func (a *Agent) ReportMetrics(c *resty.Client) {
+func (a *Agent) reportMetrics(c *resty.Client) {
 	url := fmt.Sprintf("http://%s/update/", a.config.Address)
 	for _, metric := range a.metrics {
 		mMarshaled, _ := json.Marshal(metric)
@@ -143,9 +143,9 @@ func (a *Agent) Run(cResty *resty.Client) {
 		case <-sigsEnd:
 			return
 		case <-pollTicker.C:
-			a.PollMetrics()
+			a.pollMetrics()
 		case <-reportTicker.C:
-			a.ReportMetrics(cResty)
+			a.reportMetrics(cResty)
 		}
 	}
 }

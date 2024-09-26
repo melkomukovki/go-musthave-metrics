@@ -95,10 +95,17 @@ func GetMetricHandlerJSON(store storage.Storage) gin.HandlerFunc {
 
 		res, err := store.GetMetric(v.MType, v.ID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error":   true,
-				"message": err.Error(),
-			})
+			if err.Error() == "metric not found" {
+				c.JSON(http.StatusNotFound, gin.H{
+					"error":   true,
+					"message": err.Error(),
+				})
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error":   true,
+					"message": err.Error(),
+				})
+			}
 			return
 		}
 
