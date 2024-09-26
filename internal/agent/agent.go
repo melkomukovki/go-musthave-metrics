@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
+	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
+	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/melkomukovki/go-musthave-metrics/internal/config"
@@ -122,4 +126,26 @@ func (a *Agent) ReportMetrics(c *resty.Client) {
 		fmt.Printf("Metric %s sended. Status code: %d\n", metric.ID, resp.StatusCode())
 	}
 	a.resetPollCounter()
+}
+
+func (a *Agent) Run(cResty *resty.Client) {
+	pollTicker := time.NewTicker(time.Duration(a.config.PollInterval) * time.Second)
+	defer pollTicker.Stop()
+
+	reportTicker := time.NewTicker(time.Duration(a.config.ReportInterval) * time.Second)
+	defer reportTicker.Stop()
+
+	sigsEnd := make(chan os.Signal, 1)
+	signal.Notify(sigsEnd, syscall.SIGINT, syscall.SIGTERM)
+
+	for {
+		select {
+		case <-sigsEnd:
+			return
+		case <-pollTicker.C:
+			a.PollMetrics()
+		case <-reportTicker.C:
+			a.ReportMetrics(cResty)
+		}
+	}
 }
