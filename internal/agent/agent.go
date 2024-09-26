@@ -13,7 +13,7 @@ import (
 
 type Agent struct {
 	pollCounter int64
-	metrics     *[]storage.Metrics
+	metrics     []storage.Metrics
 	config      *config.ClientConfig
 }
 
@@ -105,12 +105,12 @@ func (a *Agent) PollMetrics() {
 	newAr = append(newAr, storage.Metrics{ID: "RandomValue", MType: storage.Gauge, Value: &randomValue})
 	newAr = append(newAr, storage.Metrics{ID: "PollCount", MType: storage.Counter, Delta: &a.pollCounter})
 
-	a.metrics = &newAr
+	a.metrics = newAr
 }
 
 func (a *Agent) ReportMetrics(c *resty.Client) {
 	url := fmt.Sprintf("http://%s/update/", a.config.Address)
-	for _, metric := range *a.metrics {
+	for _, metric := range a.metrics {
 		mMarshaled, _ := json.Marshal(metric)
 		resp, err := c.R().
 			SetBody(mMarshaled).
