@@ -40,21 +40,17 @@ func LoggerMiddleware(log *logrus.Logger) gin.HandlerFunc {
 }
 
 func NewServerRouter(store storage.Storage) *gin.Engine {
-	// Disable debug info
-	// gin.SetMode(gin.ReleaseMode)
+	engine := gin.New()
 
-	r := gin.New()
-
-	// Custom log
 	log := logrus.New()
 	log.SetFormatter(&logrus.JSONFormatter{})
-	r.Use(LoggerMiddleware(log), gin.Recovery())
+	engine.Use(LoggerMiddleware(log), gin.Recovery())
 
-	r.POST("/update/", handlers.PostMetricHandlerJSON(store))
-	r.POST("/update/:mType/:mName/:mValue", handlers.PostMetricHandler(store))
-	r.POST("/value/", handlers.GetMetricHandlerJSON(store))
-	r.GET("/value/:mType/:mName", handlers.GetMetricHandler(store))
-	r.GET("/", handlers.ShowMetrics(store))
+	engine.POST("/update/", handlers.PostMetricHandlerJSON(store))
+	engine.POST("/update/:mType/:mName/:mValue", handlers.PostMetricHandler(store))
+	engine.POST("/value/", handlers.GetMetricHandlerJSON(store))
+	engine.GET("/value/:mType/:mName", handlers.GetMetricHandler(store))
+	engine.GET("/", handlers.ShowMetrics(store))
 
-	return r
+	return engine
 }

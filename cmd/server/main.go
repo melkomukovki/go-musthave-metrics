@@ -18,5 +18,7 @@ func main() {
 
 	r := server.NewServerRouter(store)
 
-	r.Run(cfg.Address)
+	if err := r.Run(cfg.Address); err != nil {
+		log.Fatal(err)
+	}
 }
