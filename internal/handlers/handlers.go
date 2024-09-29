@@ -14,8 +14,9 @@ func PostMetricHandlerJSON(store storage.Storage) gin.HandlerFunc {
 	fn := func(c *gin.Context) {
 		var v storage.Metrics
 		if err := c.BindJSON(&v); err != nil {
+			errMsg := fmt.Sprintf("Invalid payload. Error: %s", err.Error())
 			c.JSON(http.StatusBadRequest, gin.H{
-				"message": "Invaild payload",
+				"message": errMsg,
 			})
 			return
 		}
@@ -23,7 +24,6 @@ func PostMetricHandlerJSON(store storage.Storage) gin.HandlerFunc {
 		err := store.AddMetric(v)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error":   true,
 				"message": err.Error(),
 			})
 			return
@@ -32,7 +32,6 @@ func PostMetricHandlerJSON(store storage.Storage) gin.HandlerFunc {
 		rM, err := store.GetMetric(v.MType, v.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":   true,
 				"message": err.Error(),
 			})
 			return
@@ -87,7 +86,6 @@ func GetMetricHandlerJSON(store storage.Storage) gin.HandlerFunc {
 		var v storage.Metrics
 		if err := c.BindJSON(&v); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error":   true,
 				"message": "Invaild payload " + err.Error(),
 			})
 			return
@@ -97,12 +95,10 @@ func GetMetricHandlerJSON(store storage.Storage) gin.HandlerFunc {
 		if err != nil {
 			if err.Error() == "metric not found" {
 				c.JSON(http.StatusNotFound, gin.H{
-					"error":   true,
 					"message": err.Error(),
 				})
 			} else {
 				c.JSON(http.StatusBadRequest, gin.H{
-					"error":   true,
 					"message": err.Error(),
 				})
 			}

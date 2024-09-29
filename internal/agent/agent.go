@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
@@ -116,12 +118,22 @@ func (a *Agent) reportMetrics(c *resty.Client) {
 	url := fmt.Sprintf("http://%s/update/", a.config.Address)
 	for _, metric := range a.metrics {
 		mMarshaled, _ := json.Marshal(metric)
+		compressedData, err := gzipData(mMarshaled)
+		if err != nil {
+			fmt.Printf("Error sending metric %s. %s \n ", metric.ID, err.Error())
+			continue
+		}
+
+		fmt.Println("CompressedData: ", compressedData)
 		resp, err := c.R().
-			SetBody(mMarshaled).
+			SetBody(compressedData).
 			SetHeader("Content-Type", "application/json").
+			SetHeader("Content-Encoding", "gzip").
+			SetHeader("Accept-Encoding", "gzip").
 			Post(url)
 		if err != nil {
-			fmt.Printf("Detected error: %s\n", err.Error())
+			fmt.Printf("Error sending metric %s. Detected error: %s\n", metric.ID, err.Error())
+			continue
 		}
 		fmt.Printf("Metric %s sended. Status code: %d\n", metric.ID, resp.StatusCode())
 	}
@@ -138,6 +150,11 @@ func (a *Agent) Run(cResty *resty.Client) {
 	sigsEnd := make(chan os.Signal, 1)
 	signal.Notify(sigsEnd, syscall.SIGINT, syscall.SIGTERM)
 
+	// First-time poll and send metrics
+	a.pollMetrics()
+	a.reportMetrics(cResty)
+
+	// And loop with timers
 	for {
 		select {
 		case <-sigsEnd:
@@ -148,4 +165,20 @@ func (a *Agent) Run(cResty *resty.Client) {
 			a.reportMetrics(cResty)
 		}
 	}
+}
+
+func gzipData(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	gzipWriter := gzip.NewWriter(&buf)
+
+	_, err := gzipWriter.Write(data)
+	if err != nil {
+		return nil, err
+	}
+	err = gzipWriter.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }

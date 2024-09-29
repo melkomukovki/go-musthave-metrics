@@ -45,6 +45,7 @@ func NewServerRouter(store storage.Storage) *gin.Engine {
 	log := logrus.New()
 	log.SetFormatter(&logrus.JSONFormatter{})
 	engine.Use(LoggerMiddleware(log), gin.Recovery())
+	engine.Use(gzipMiddleware(), gin.Recovery())
 
 	engine.POST("/update/", handlers.PostMetricHandlerJSON(store))
 	engine.POST("/update/:mType/:mName/:mValue", handlers.PostMetricHandler(store))
