@@ -11,7 +11,7 @@ import (
 const (
 	DefaultAddress         = "localhost:8080"
 	DefaultStoreInterval   = 300
-	DefaultFileStoragePath = "storefile.txt"
+	DefaultFileStoragePath = "storefile.json"
 	DefaultRestore         = true
 )
 

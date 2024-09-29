@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"log"
+	"os"
 	"time"
 
 	"github.com/melkomukovki/go-musthave-metrics/internal/server"
@@ -18,6 +20,9 @@ func main() {
 	store := storage.NewMemStorage(cfg.StoreInterval, cfg.FileStoragePath)
 
 	if cfg.Restore {
+		if _, err := os.Stat(cfg.FileStoragePath); errors.Is(err, os.ErrNotExist) {
+			os.Create(cfg.FileStoragePath)
+		}
 		err := store.RestoreStorage()
 		if err != nil {
 			log.Fatal(err)
