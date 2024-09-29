@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/melkomukovki/go-musthave-metrics/internal/handlers"
+	"github.com/melkomukovki/go-musthave-metrics/internal/server/handlers"
 	"github.com/melkomukovki/go-musthave-metrics/internal/storage"
 	"github.com/sirupsen/logrus"
 )

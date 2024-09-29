@@ -9,7 +9,7 @@ type Storage interface {
 	AddMetric(metric Metrics) (err error)
 	GetMetric(metricType, metricName string) (metric Metrics, err error)
 	GetAllMetrics() (metrics []Metrics)
-	RestoreStorage()
+	RestoreStorage() error
 	BackupMetrics() error
 }
 

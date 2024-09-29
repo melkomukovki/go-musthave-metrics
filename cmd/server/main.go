@@ -2,9 +2,10 @@ package main
 
 import (
 	"log"
+	"time"
 
-	"github.com/melkomukovki/go-musthave-metrics/internal/config"
 	"github.com/melkomukovki/go-musthave-metrics/internal/server"
+	"github.com/melkomukovki/go-musthave-metrics/internal/server/config"
 	"github.com/melkomukovki/go-musthave-metrics/internal/storage"
 )
 
@@ -17,11 +18,19 @@ func main() {
 	store := storage.NewMemStorage(cfg.StoreInterval, cfg.FileStoragePath)
 
 	if cfg.Restore {
-		store.RestoreStorage()
+		err := store.RestoreStorage()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	if !store.SyncStore {
-		go store.BackupMetrics()
+		go func() {
+			for {
+				time.Sleep(time.Duration(cfg.StoreInterval) * time.Second)
+				store.BackupMetrics()
+			}
+		}()
 	}
 
 	engine := server.NewServerRouter(store)

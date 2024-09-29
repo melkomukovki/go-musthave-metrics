@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"time"
 )
 
 // Validate implimentation
@@ -32,23 +31,27 @@ type MemStorage struct {
 	StorePath      string
 }
 
-func (m MemStorage) RestoreStorage() {
+func (m MemStorage) RestoreStorage() error {
 	metrics := []Metrics{}
-	data, _ := os.ReadFile(m.StorePath)
+	data, err := os.ReadFile(m.StorePath)
+	if err != nil {
+		return err
+	}
 	json.Unmarshal(data, &metrics)
 	for _, rm := range metrics {
 		m.AddMetric(rm)
 	}
+	return nil
 }
 
 func (m MemStorage) BackupMetrics() error {
-	for {
-		time.Sleep(time.Duration(m.storeInterval) * time.Second)
-		allMetrics := m.GetAllMetrics()
-		mJSON, _ := json.Marshal(allMetrics)
-		os.WriteFile(m.StorePath, mJSON, 0666)
+	allMetrics := m.GetAllMetrics()
+	mJSON, err := json.Marshal(allMetrics)
+	if err != nil {
+		return err
 	}
-
+	os.WriteFile(m.StorePath, mJSON, 0666)
+	return nil
 }
 
 func (m MemStorage) AddMetric(metric Metrics) error {
@@ -75,6 +78,10 @@ func (m MemStorage) AddMetric(metric Metrics) error {
 		m.addCounterMetric(&tm)
 	default:
 		return errors.New("not supported metric type")
+	}
+
+	if m.SyncStore {
+		m.BackupMetrics()
 	}
 	return nil
 }
