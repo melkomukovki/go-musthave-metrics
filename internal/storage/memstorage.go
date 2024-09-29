@@ -11,7 +11,7 @@ import (
 var _ Storage = MemStorage{}
 
 func NewMemStorage(storeInterval int, storePath string) *MemStorage {
-	var sStore bool = false
+	var sStore = false
 	if storeInterval == 0 {
 		sStore = true
 	}
