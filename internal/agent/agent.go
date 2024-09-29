@@ -124,7 +124,6 @@ func (a *Agent) reportMetrics(c *resty.Client) {
 			continue
 		}
 
-		fmt.Println("CompressedData: ", compressedData)
 		resp, err := c.R().
 			SetBody(compressedData).
 			SetHeader("Content-Type", "application/json").

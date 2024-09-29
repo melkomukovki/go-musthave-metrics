@@ -149,6 +149,6 @@ func ShowMetrics(store storage.Storage) gin.HandlerFunc {
 				result += fmt.Sprintf("%s:%d\n", v.ID, *v.Delta)
 			}
 		}
-		c.String(http.StatusOK, result)
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(result))
 	}
 }
