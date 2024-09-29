@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"compress/gzip"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -75,32 +76,31 @@ func (c *compressWriter) Written() bool {
 
 func gzipMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		applicationHeader := c.GetHeader("Content-Type")
-		if strings.Contains(applicationHeader, "application/json") || strings.Contains(applicationHeader, "text/html") {
-			contentEncoding := c.GetHeader("Content-Encoding")
-			recivedGzip := strings.Contains(contentEncoding, "gzip")
+		fmt.Println("Inside first if!")
+		contentEncoding := c.GetHeader("Content-Encoding")
+		recivedGzip := strings.Contains(contentEncoding, "gzip")
 
-			if recivedGzip {
-				gzipReader, err := gzip.NewReader(c.Request.Body)
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{
-						"message": "invalid gzip format",
-					})
-					c.Abort()
-					return
-				}
-				defer gzipReader.Close()
-				c.Request.Body = gzipReader
+		if recivedGzip {
+			gzipReader, err := gzip.NewReader(c.Request.Body)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"message": "invalid gzip format",
+				})
+				c.Abort()
+				return
 			}
+			defer gzipReader.Close()
+			c.Request.Body = gzipReader
+		}
 
-			acceptEncoding := c.GetHeader("Accept-Encoding")
-			supportsGzip := strings.Contains(acceptEncoding, "gzip")
+		acceptEncoding := c.GetHeader("Accept-Encoding")
+		supportsGzip := strings.Contains(acceptEncoding, "gzip")
 
-			if supportsGzip {
-				cw := newCompressWriter(c.Writer)
-				c.Writer = cw
-				defer cw.zw.Close()
-			}
+		if supportsGzip {
+			fmt.Println("Inside gzip response")
+			cw := newCompressWriter(c.Writer)
+			c.Writer = cw
+			defer cw.zw.Close()
 		}
 		c.Next()
 	}
