@@ -2,19 +2,29 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"log"
+	"os"
+	"strconv"
+	"strings"
 
 	"github.com/caarlos0/env/v6"
 )
 
 const (
-	DefaultAddress        = "localhost:8080"
-	DefaultPollInterval   = 2
-	DefaultReportInterval = 10
+	DefaultAddress         = "localhost:8080"
+	DefaultPollInterval    = 2
+	DefaultReportInterval  = 10
+	DefaultStoreInterval   = 300
+	DefaultFileStoragePath = "storefile.txt"
+	DefaultRestore         = true
 )
 
 type ServerConfig struct {
-	Address string `env:"ADDRESS"`
+	Address         string `env:"ADDRESS"`
+	StoreInterval   int    `env:"STORE_INTERVAL"`
+	FileStoragePath string `env:"FILE_STORAGE_PATH"`
+	Restore         bool   `env:"RESTORE"`
 }
 
 type ClientConfig struct {
@@ -26,18 +36,35 @@ type ClientConfig struct {
 func GetServerConfig() (ServerConfig, error) {
 	var cfg ServerConfig
 
-	if err := env.Parse(&cfg); err != nil {
-		return ServerConfig{}, err
-	}
-
-	if cfg.Address != "" {
-		return cfg, nil
-	}
-
-	fullAddres := flag.String("a", DefaultAddress, "Server address and port")
+	flag.StringVar(&cfg.Address, "a", DefaultAddress, "Server address and port")
+	flag.IntVar(&cfg.StoreInterval, "i", DefaultStoreInterval, "Store interval")
+	flag.StringVar(&cfg.FileStoragePath, "f", DefaultFileStoragePath, "File with metrics")
+	flag.BoolVar(&cfg.Restore, "r", DefaultRestore, "Restore from file (bool)")
 	flag.Parse()
 
-	cfg.Address = *fullAddres
+	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
+		cfg.Address = envAddress
+	}
+	if envStoreInterval := os.Getenv("STORE_INTERVAL"); envStoreInterval != "" {
+		iStoreInterval, err := strconv.Atoi(envStoreInterval)
+		if err != nil {
+			return ServerConfig{}, fmt.Errorf("invalid value for env variable `STORE_INTERVAL`")
+		}
+		cfg.StoreInterval = iStoreInterval
+	}
+	if envFileStorePath := os.Getenv("FILE_STORAGE_PATH"); envFileStorePath != "" {
+		cfg.FileStoragePath = envFileStorePath
+	}
+	if envRestore := os.Getenv("RESTORE"); envRestore != "" {
+		if strings.ToLower(envRestore) == "true" {
+			cfg.Restore = true
+		} else if strings.ToLower(envRestore) == "false" {
+			cfg.Restore = false
+		} else {
+			return ServerConfig{}, fmt.Errorf("invalid value for env variable `RESTORE`")
+		}
+	}
+
 	return cfg, nil
 }
 

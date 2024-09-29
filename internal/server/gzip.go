@@ -3,7 +3,6 @@ package server
 import (
 	"bufio"
 	"compress/gzip"
-	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -76,7 +75,6 @@ func (c *compressWriter) Written() bool {
 
 func gzipMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		fmt.Println("Inside first if!")
 		contentEncoding := c.GetHeader("Content-Encoding")
 		recivedGzip := strings.Contains(contentEncoding, "gzip")
 
@@ -97,7 +95,6 @@ func gzipMiddleware() gin.HandlerFunc {
 		supportsGzip := strings.Contains(acceptEncoding, "gzip")
 
 		if supportsGzip {
-			fmt.Println("Inside gzip response")
 			cw := newCompressWriter(c.Writer)
 			c.Writer = cw
 			defer cw.zw.Close()

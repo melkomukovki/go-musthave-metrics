@@ -1,20 +1,54 @@
 package storage
 
-import "errors"
+import (
+	"encoding/json"
+	"errors"
+	"os"
+	"time"
+)
 
 // Validate implimentation
 var _ Storage = MemStorage{}
 
-func NewMemStorage() *MemStorage {
+func NewMemStorage(storeInterval int, storePath string) *MemStorage {
+	var sStore bool = false
+	if storeInterval == 0 {
+		sStore = true
+	}
 	return &MemStorage{
 		GaugeMetrics:   make(map[string]float64),
 		CounterMetrics: make(map[string]int64),
+		SyncStore:      sStore,
+		storeInterval:  storeInterval,
+		StorePath:      storePath,
 	}
 }
 
 type MemStorage struct {
 	GaugeMetrics   map[string]float64
 	CounterMetrics map[string]int64
+	storeInterval  int
+	SyncStore      bool
+	StorePath      string
+}
+
+func (m MemStorage) RestoreStorage() {
+	metrics := []Metrics{}
+	data, _ := os.ReadFile(m.StorePath)
+	json.Unmarshal(data, &metrics)
+	for _, rm := range metrics {
+		m.AddMetric(rm)
+	}
+}
+
+func (m MemStorage) BackupMetrics() error {
+	for {
+		time.Sleep(time.Duration(m.storeInterval) * time.Second)
+		allMetrics := m.GetAllMetrics()
+		mJSON, _ := json.Marshal(allMetrics)
+		os.WriteFile(m.StorePath, mJSON, 0666)
+	}
+
 }
 
 func (m MemStorage) AddMetric(metric Metrics) error {

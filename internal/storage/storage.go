@@ -5,18 +5,12 @@ const (
 	Counter = "counter"
 )
 
-// type Storage interface {
-// 	AddGaugeMetric(string, string) error
-// 	AddCounterMetric(string, string) error
-// 	GetGaugeMetric(string) (float64, error)
-// 	GetCounterMetric(string) (int64, error)
-// 	GetAllMetrics() string
-// }
-
 type Storage interface {
 	AddMetric(metric Metrics) (err error)
 	GetMetric(metricType, metricName string) (metric Metrics, err error)
 	GetAllMetrics() (metrics []Metrics)
+	RestoreStorage()
+	BackupMetrics() error
 }
 
 type Metrics struct {

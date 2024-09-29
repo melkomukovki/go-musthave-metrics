@@ -8,12 +8,22 @@ import (
 	"github.com/melkomukovki/go-musthave-metrics/internal/storage"
 )
 
-var store = storage.NewMemStorage()
+// var store storage.Storage
 
 func main() {
 	cfg, err := config.GetServerConfig()
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	store := storage.NewMemStorage(cfg.StoreInterval, cfg.FileStoragePath)
+
+	if cfg.Restore {
+		store.RestoreStorage()
+	}
+
+	if !store.SyncStore {
+		go store.BackupMetrics()
 	}
 
 	engine := server.NewServerRouter(store)
