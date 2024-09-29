@@ -8,8 +8,6 @@ import (
 	"github.com/melkomukovki/go-musthave-metrics/internal/storage"
 )
 
-// var store storage.Storage
-
 func main() {
 	cfg, err := config.GetServerConfig()
 	if err != nil {
