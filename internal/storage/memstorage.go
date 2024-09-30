@@ -1,72 +1,150 @@
 package storage
 
 import (
+	"encoding/json"
 	"errors"
-	"fmt"
-	"strconv"
+	"os"
 )
 
 // Validate implimentation
 var _ Storage = MemStorage{}
 
-func NewMemStorage() *MemStorage {
+func NewMemStorage(storeInterval int, storePath string) *MemStorage {
+	var sStore = false
+	if storeInterval == 0 {
+		sStore = true
+	}
 	return &MemStorage{
 		GaugeMetrics:   make(map[string]float64),
 		CounterMetrics: make(map[string]int64),
+		SyncStore:      sStore,
+		storeInterval:  storeInterval,
+		StorePath:      storePath,
 	}
 }
 
 type MemStorage struct {
 	GaugeMetrics   map[string]float64
 	CounterMetrics map[string]int64
+	storeInterval  int
+	SyncStore      bool
+	StorePath      string
 }
 
-func (m MemStorage) AddGaugeMetric(name, v string) error {
-	vFloat, err := strconv.ParseFloat(v, 64)
+func (m MemStorage) RestoreStorage() error {
+	metrics := []Metrics{}
+	data, err := os.ReadFile(m.StorePath)
 	if err != nil {
-		return errors.New("can't parse value")
+		return err
 	}
-	m.GaugeMetrics[name] = vFloat
+	json.Unmarshal(data, &metrics)
+	for _, rm := range metrics {
+		m.AddMetric(rm)
+	}
 	return nil
 }
 
-func (m MemStorage) AddCounterMetric(name, v string) error {
-	vInt, err := strconv.ParseInt(v, 10, 64)
+func (m MemStorage) BackupMetrics() error {
+	allMetrics := m.GetAllMetrics()
+	mJSON, err := json.Marshal(allMetrics)
 	if err != nil {
-		return errors.New("can't parse value")
+		return err
 	}
-	if val, ok := m.CounterMetrics[name]; ok {
-		newVal := val + vInt
-		m.CounterMetrics[name] = newVal
+	os.WriteFile(m.StorePath, mJSON, 0666)
+	return nil
+}
+
+func (m MemStorage) AddMetric(metric Metrics) error {
+	switch metric.MType {
+	case Gauge:
+		if metric.Value == nil {
+			return errors.New("field 'value' can't be empty for metric with type gauge")
+		}
+		tm := GaugeMetrics{
+			ID:    metric.ID,
+			MType: metric.MType,
+			Value: metric.Value,
+		}
+		m.addGaugeMetric(&tm)
+	case Counter:
+		if metric.Delta == nil {
+			return errors.New("field 'delta' can't be empty for metric with type counter ")
+		}
+		tm := CounterMetrics{
+			ID:    metric.ID,
+			MType: metric.MType,
+			Delta: metric.Delta,
+		}
+		m.addCounterMetric(&tm)
+	default:
+		return errors.New("not supported metric type")
+	}
+
+	if m.SyncStore {
+		m.BackupMetrics()
+	}
+	return nil
+}
+
+func (m MemStorage) addGaugeMetric(metric *GaugeMetrics) {
+	m.GaugeMetrics[metric.ID] = *metric.Value
+}
+
+func (m MemStorage) addCounterMetric(metric *CounterMetrics) {
+	if val, ok := m.CounterMetrics[metric.ID]; ok {
+		newVal := val + *metric.Delta
+		m.CounterMetrics[metric.ID] = newVal
 	} else {
-		m.CounterMetrics[name] = vInt
+		m.CounterMetrics[metric.ID] = *metric.Delta
 	}
-	return nil
 }
 
-func (m MemStorage) GetGaugeMetric(name string) (float64, error) {
-	v, ok := m.GaugeMetrics[name]
-	if ok {
-		return v, nil
+func (m MemStorage) GetMetric(mType, mName string) (Metrics, error) {
+	switch mType {
+	case Gauge:
+		if val, ok := m.GaugeMetrics[mName]; ok {
+			tm := Metrics{
+				ID:    mName,
+				MType: Gauge,
+				Value: &val,
+			}
+			return tm, nil
+		} else {
+			return Metrics{}, errors.New("metric not found")
+		}
+	case Counter:
+		if val, ok := m.CounterMetrics[mName]; ok {
+			tm := Metrics{
+				ID:    mName,
+				MType: Counter,
+				Delta: &val,
+			}
+			return tm, nil
+		} else {
+			return Metrics{}, errors.New("metric not found")
+		}
+	default:
+		return Metrics{}, errors.New("not supported metric type")
 	}
-	return 0, errors.New("value not found")
 }
 
-func (m MemStorage) GetCounterMetric(name string) (int64, error) {
-	v, ok := m.CounterMetrics[name]
-	if ok {
-		return v, nil
-	}
-	return 0, errors.New("value not found")
-}
-
-func (m MemStorage) GetAllMetrics() string {
-	res := ""
-	for k, v := range m.GaugeMetrics {
-		res += fmt.Sprintf("%s:%.3f\n", k, v)
-	}
+func (m MemStorage) GetAllMetrics() []Metrics {
+	var res []Metrics
 	for k, v := range m.CounterMetrics {
-		res += fmt.Sprintf("%s:%d\n", k, v)
+		tm := Metrics{
+			ID:    k,
+			MType: Counter,
+			Delta: &v,
+		}
+		res = append(res, tm)
+	}
+	for k, v := range m.GaugeMetrics {
+		tm := Metrics{
+			ID:    k,
+			MType: Gauge,
+			Value: &v,
+		}
+		res = append(res, tm)
 	}
 	return res
 }

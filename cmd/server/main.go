@@ -1,15 +1,15 @@
 package main
 
 import (
+	"errors"
 	"log"
+	"os"
+	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/melkomukovki/go-musthave-metrics/internal/config"
 	"github.com/melkomukovki/go-musthave-metrics/internal/server"
+	"github.com/melkomukovki/go-musthave-metrics/internal/server/config"
 	"github.com/melkomukovki/go-musthave-metrics/internal/storage"
 )
-
-var store = storage.NewMemStorage()
 
 func main() {
 	cfg, err := config.GetServerConfig()
@@ -17,8 +17,30 @@ func main() {
 		log.Fatal(err)
 	}
 
-	gin.ForceConsoleColor()
-	r := server.NewServerRouter(store)
+	store := storage.NewMemStorage(cfg.StoreInterval, cfg.FileStoragePath)
 
-	r.Run(cfg.Address)
+	if cfg.Restore {
+		if _, err := os.Stat(cfg.FileStoragePath); errors.Is(err, os.ErrNotExist) {
+			os.Create(cfg.FileStoragePath)
+		}
+		err := store.RestoreStorage()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if !store.SyncStore {
+		go func() {
+			for {
+				time.Sleep(time.Duration(cfg.StoreInterval) * time.Second)
+				store.BackupMetrics()
+			}
+		}()
+	}
+
+	engine := server.NewServerRouter(store)
+
+	if err := engine.Run(cfg.Address); err != nil {
+		log.Fatal(err)
+	}
 }
