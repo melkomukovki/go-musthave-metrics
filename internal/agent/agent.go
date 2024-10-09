@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"sync"
 	"syscall"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 )
 
 type Agent struct {
+	mu          sync.Mutex
 	pollCounter int64
 	metrics     []storage.Metrics
 	config      *config.ClientConfig
@@ -30,10 +32,14 @@ func NewAgent(cfg *config.ClientConfig) *Agent {
 }
 
 func (a *Agent) addPollCounter() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.pollCounter++
 }
 
 func (a *Agent) resetPollCounter() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.pollCounter = 0
 }
 
@@ -111,6 +117,8 @@ func (a *Agent) pollMetrics() {
 	newAr = append(newAr, storage.Metrics{ID: "RandomValue", MType: storage.Gauge, Value: &randomValue})
 	newAr = append(newAr, storage.Metrics{ID: "PollCount", MType: storage.Counter, Delta: &a.pollCounter})
 
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.metrics = newAr
 }
 

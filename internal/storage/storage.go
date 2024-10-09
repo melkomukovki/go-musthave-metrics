@@ -9,8 +9,10 @@ type Storage interface {
 	AddMetric(metric Metrics) (err error)
 	GetMetric(metricType, metricName string) (metric Metrics, err error)
 	GetAllMetrics() (metrics []Metrics)
-	RestoreStorage() error
-	BackupMetrics() error
+	RestoreStorage() (err error)
+	BackupMetrics() (err error)
+	SyncStorage() (flag bool)
+	Ping() (err error)
 }
 
 type Metrics struct {

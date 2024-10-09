@@ -152,3 +152,14 @@ func ShowMetrics(store storage.Storage) gin.HandlerFunc {
 		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(result))
 	}
 }
+
+func PingHandler(store storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		err := store.Ping()
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Internal Server Error")
+		} else {
+			c.String(http.StatusOK, "Pong")
+		}
+	}
+}
