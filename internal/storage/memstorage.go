@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"sync"
 )
 
 var (
@@ -26,7 +25,6 @@ func NewMemStorage(storeInterval int, storePath string) *MemStorage {
 }
 
 type MemStorage struct {
-	mu             *sync.RWMutex
 	GaugeMetrics   map[string]float64
 	CounterMetrics map[string]int64
 	storeInterval  int
@@ -39,9 +37,6 @@ func (m *MemStorage) SyncStorage() bool {
 }
 
 func (m *MemStorage) RestoreStorage() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	metrics := []Metrics{}
 	data, err := os.ReadFile(m.StorePath)
 	if err != nil {
@@ -55,9 +50,6 @@ func (m *MemStorage) RestoreStorage() error {
 }
 
 func (m *MemStorage) BackupMetrics() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	allMetrics := m.GetAllMetrics()
 	mJSON, err := json.Marshal(allMetrics)
 	if err != nil {
@@ -100,16 +92,10 @@ func (m *MemStorage) AddMetric(metric Metrics) error {
 }
 
 func (m *MemStorage) addGaugeMetric(metric *GaugeMetrics) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
 	m.GaugeMetrics[metric.ID] = *metric.Value
 }
 
 func (m *MemStorage) addCounterMetric(metric *CounterMetrics) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
 	if val, ok := m.CounterMetrics[metric.ID]; ok {
 		newVal := val + *metric.Delta
 		m.CounterMetrics[metric.ID] = newVal
@@ -119,9 +105,6 @@ func (m *MemStorage) addCounterMetric(metric *CounterMetrics) {
 }
 
 func (m *MemStorage) GetMetric(mType, mName string) (Metrics, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	switch mType {
 	case Gauge:
 		if val, ok := m.GaugeMetrics[mName]; ok {
@@ -151,9 +134,6 @@ func (m *MemStorage) GetMetric(mType, mName string) (Metrics, error) {
 }
 
 func (m *MemStorage) GetAllMetrics() []Metrics {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	var res []Metrics
 	for k, v := range m.CounterMetrics {
 		tm := Metrics{
