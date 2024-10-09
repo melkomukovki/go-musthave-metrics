@@ -1,4 +1,4 @@
-package server
+package middleware
 
 import (
 	"bufio"
@@ -73,7 +73,7 @@ func (c *compressWriter) Written() bool {
 	return c.w.Written()
 }
 
-func gzipMiddleware() gin.HandlerFunc {
+func GzipMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		contentEncoding := c.GetHeader("Content-Encoding")
 		recivedGzip := strings.Contains(contentEncoding, "gzip")

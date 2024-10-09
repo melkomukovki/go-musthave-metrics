@@ -6,18 +6,19 @@ import (
 	"os"
 )
 
-// Validate implimentation
-var _ Storage = MemStorage{}
+var (
+	_ Storage = &MemStorage{}
+)
 
 func NewMemStorage(storeInterval int, storePath string) *MemStorage {
-	var sStore = false
+	var syncMode = false
 	if storeInterval == 0 {
-		sStore = true
+		syncMode = true
 	}
 	return &MemStorage{
 		GaugeMetrics:   make(map[string]float64),
 		CounterMetrics: make(map[string]int64),
-		SyncStore:      sStore,
+		SyncStore:      syncMode,
 		storeInterval:  storeInterval,
 		StorePath:      storePath,
 	}
@@ -31,7 +32,11 @@ type MemStorage struct {
 	StorePath      string
 }
 
-func (m MemStorage) RestoreStorage() error {
+func (m *MemStorage) SyncStorage() bool {
+	return m.SyncStore
+}
+
+func (m *MemStorage) RestoreStorage() error {
 	metrics := []Metrics{}
 	data, err := os.ReadFile(m.StorePath)
 	if err != nil {
@@ -44,7 +49,7 @@ func (m MemStorage) RestoreStorage() error {
 	return nil
 }
 
-func (m MemStorage) BackupMetrics() error {
+func (m *MemStorage) BackupMetrics() error {
 	allMetrics := m.GetAllMetrics()
 	mJSON, err := json.Marshal(allMetrics)
 	if err != nil {
@@ -54,7 +59,7 @@ func (m MemStorage) BackupMetrics() error {
 	return nil
 }
 
-func (m MemStorage) AddMetric(metric Metrics) error {
+func (m *MemStorage) AddMetric(metric Metrics) error {
 	switch metric.MType {
 	case Gauge:
 		if metric.Value == nil {
@@ -86,11 +91,11 @@ func (m MemStorage) AddMetric(metric Metrics) error {
 	return nil
 }
 
-func (m MemStorage) addGaugeMetric(metric *GaugeMetrics) {
+func (m *MemStorage) addGaugeMetric(metric *GaugeMetrics) {
 	m.GaugeMetrics[metric.ID] = *metric.Value
 }
 
-func (m MemStorage) addCounterMetric(metric *CounterMetrics) {
+func (m *MemStorage) addCounterMetric(metric *CounterMetrics) {
 	if val, ok := m.CounterMetrics[metric.ID]; ok {
 		newVal := val + *metric.Delta
 		m.CounterMetrics[metric.ID] = newVal
@@ -99,7 +104,7 @@ func (m MemStorage) addCounterMetric(metric *CounterMetrics) {
 	}
 }
 
-func (m MemStorage) GetMetric(mType, mName string) (Metrics, error) {
+func (m *MemStorage) GetMetric(mType, mName string) (Metrics, error) {
 	switch mType {
 	case Gauge:
 		if val, ok := m.GaugeMetrics[mName]; ok {
@@ -128,7 +133,7 @@ func (m MemStorage) GetMetric(mType, mName string) (Metrics, error) {
 	}
 }
 
-func (m MemStorage) GetAllMetrics() []Metrics {
+func (m *MemStorage) GetAllMetrics() []Metrics {
 	var res []Metrics
 	for k, v := range m.CounterMetrics {
 		tm := Metrics{
@@ -147,4 +152,8 @@ func (m MemStorage) GetAllMetrics() []Metrics {
 		res = append(res, tm)
 	}
 	return res
+}
+
+func (m *MemStorage) Ping() error {
+	return nil
 }
