@@ -129,7 +129,7 @@ func (m *MemStorage) GetMetric(ctx context.Context, mType, mName string) (Metric
 			}
 			return tm, nil
 		} else {
-			return Metrics{}, errors.New("metric not found")
+			return Metrics{}, ErrMetricNotFound
 		}
 	case Counter:
 		if val, ok := m.CounterMetrics[mName]; ok {
@@ -140,10 +140,10 @@ func (m *MemStorage) GetMetric(ctx context.Context, mType, mName string) (Metric
 			}
 			return tm, nil
 		} else {
-			return Metrics{}, errors.New("metric not found")
+			return Metrics{}, ErrMetricNotFound
 		}
 	default:
-		return Metrics{}, errors.New("not supported metric type")
+		return Metrics{}, ErrMetricNotSupportedType
 	}
 }
 
