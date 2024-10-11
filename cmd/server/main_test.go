@@ -48,7 +48,7 @@ func TestPostMetricHandler(t *testing.T) {
 		},
 	}
 
-	var store = storage.NewMemStorage(300, "test.txt")
+	var store = storage.NewMemStorage(300, "test.txt", false)
 
 	r := server.NewServerRouter(store)
 
@@ -77,7 +77,7 @@ func TestGetMetricHandler(t *testing.T) {
 		"/update/gauge/testGauge/333.12345",
 	}
 
-	var store = storage.NewMemStorage(300, "test.txt")
+	var store = storage.NewMemStorage(300, "test.txt", false)
 
 	r := server.NewServerRouter(store)
 

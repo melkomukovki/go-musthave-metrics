@@ -1,69 +1,83 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
+	"time"
 )
 
 var (
 	_ Storage = &MemStorage{}
 )
 
-func NewMemStorage(storeInterval int, storePath string) *MemStorage {
+func NewMemStorage(storeInterval int, storePath string, restore bool) *MemStorage {
 	var syncMode = false
 	if storeInterval == 0 {
 		syncMode = true
 	}
-	return &MemStorage{
+
+	newStorage := &MemStorage{
 		GaugeMetrics:   make(map[string]float64),
 		CounterMetrics: make(map[string]int64),
-		SyncStore:      syncMode,
+		syncStore:      syncMode,
 		storeInterval:  storeInterval,
-		StorePath:      storePath,
+		storePath:      storePath,
 	}
+
+	if restore {
+		newStorage.restoreStorage()
+	}
+
+	if !newStorage.syncStore {
+		go func() {
+			for {
+				time.Sleep(time.Duration(newStorage.storeInterval) * time.Second)
+				newStorage.BackupMetrics()
+			}
+		}()
+	}
+
+	return newStorage
 }
 
 type MemStorage struct {
 	GaugeMetrics   map[string]float64
 	CounterMetrics map[string]int64
 	storeInterval  int
-	SyncStore      bool
-	StorePath      string
+	syncStore      bool
+	storePath      string
 }
 
-func (m *MemStorage) SyncStorage() bool {
-	return m.SyncStore
-}
-
-func (m *MemStorage) RestoreStorage() error {
+func (m *MemStorage) restoreStorage() error {
 	metrics := []Metrics{}
-	data, err := os.ReadFile(m.StorePath)
+	data, err := os.ReadFile(m.storePath)
 	if err != nil {
 		return err
 	}
 	json.Unmarshal(data, &metrics)
 	for _, rm := range metrics {
-		m.AddMetric(rm)
+		m.AddMetric(context.TODO(), rm)
 	}
 	return nil
 }
 
 func (m *MemStorage) BackupMetrics() error {
-	allMetrics := m.GetAllMetrics()
+	allMetrics, _ := m.GetAllMetrics(context.TODO())
 	mJSON, err := json.Marshal(allMetrics)
 	if err != nil {
 		return err
 	}
-	os.WriteFile(m.StorePath, mJSON, 0666)
+	os.WriteFile(m.storePath, mJSON, 0666)
 	return nil
 }
 
-func (m *MemStorage) AddMetric(metric Metrics) error {
+func (m *MemStorage) AddMetric(ctx context.Context, metric Metrics) error {
 	switch metric.MType {
 	case Gauge:
 		if metric.Value == nil {
-			return errors.New("field 'value' can't be empty for metric with type gauge")
+			return ErrMissingField
 		}
 		tm := GaugeMetrics{
 			ID:    metric.ID,
@@ -73,7 +87,7 @@ func (m *MemStorage) AddMetric(metric Metrics) error {
 		m.addGaugeMetric(&tm)
 	case Counter:
 		if metric.Delta == nil {
-			return errors.New("field 'delta' can't be empty for metric with type counter ")
+			return ErrMissingField
 		}
 		tm := CounterMetrics{
 			ID:    metric.ID,
@@ -85,7 +99,7 @@ func (m *MemStorage) AddMetric(metric Metrics) error {
 		return errors.New("not supported metric type")
 	}
 
-	if m.SyncStore {
+	if m.syncStore {
 		m.BackupMetrics()
 	}
 	return nil
@@ -104,7 +118,7 @@ func (m *MemStorage) addCounterMetric(metric *CounterMetrics) {
 	}
 }
 
-func (m *MemStorage) GetMetric(mType, mName string) (Metrics, error) {
+func (m *MemStorage) GetMetric(ctx context.Context, mType, mName string) (Metrics, error) {
 	switch mType {
 	case Gauge:
 		if val, ok := m.GaugeMetrics[mName]; ok {
@@ -133,7 +147,7 @@ func (m *MemStorage) GetMetric(mType, mName string) (Metrics, error) {
 	}
 }
 
-func (m *MemStorage) GetAllMetrics() []Metrics {
+func (m *MemStorage) GetAllMetrics(ctx context.Context) ([]Metrics, error) {
 	var res []Metrics
 	for k, v := range m.CounterMetrics {
 		tm := Metrics{
@@ -151,9 +165,9 @@ func (m *MemStorage) GetAllMetrics() []Metrics {
 		}
 		res = append(res, tm)
 	}
-	return res
+	return res, nil
 }
 
-func (m *MemStorage) Ping() error {
+func (m *MemStorage) Ping(ctx context.Context) error {
 	return nil
 }

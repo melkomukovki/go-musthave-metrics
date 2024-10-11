@@ -1,9 +1,7 @@
 package main
 
 import (
-	"errors"
 	"os"
-	"time"
 
 	"github.com/melkomukovki/go-musthave-metrics/internal/server"
 	"github.com/melkomukovki/go-musthave-metrics/internal/server/config"
@@ -32,31 +30,12 @@ func main() {
 	if cfg.DataSourceName != "" {
 		store, err = storage.NewPgStorage(cfg.DataSourceName)
 		if err != nil {
-			log.Fatal().Err(err)
+			log.Fatal().Err(err).Msg("PgStorage inititalization failed")
 		}
 		log.Info().Msg("Initialized postgresql storage")
 	} else {
-		store = storage.NewMemStorage(cfg.StoreInterval, cfg.FileStoragePath)
+		store = storage.NewMemStorage(cfg.StoreInterval, cfg.FileStoragePath, cfg.Restore)
 		log.Info().Msg("Initialized memstorage")
-	}
-
-	if cfg.Restore {
-		if _, err := os.Stat(cfg.FileStoragePath); errors.Is(err, os.ErrNotExist) {
-			os.Create(cfg.FileStoragePath)
-		}
-		err := store.RestoreStorage()
-		if err != nil {
-			log.Fatal().Err(err)
-		}
-	}
-
-	if !store.SyncStorage() {
-		go func() {
-			for {
-				time.Sleep(time.Duration(cfg.StoreInterval) * time.Second)
-				store.BackupMetrics()
-			}
-		}()
 	}
 
 	engine := server.NewServerRouter(store)
