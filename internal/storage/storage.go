@@ -18,6 +18,7 @@ var (
 
 type Storage interface {
 	AddMetric(ctx context.Context, metric Metrics) (err error)
+	AddMultipleMetrics(ctx context.Context, metrics []Metrics) (err error)
 	GetMetric(ctx context.Context, metricType, metricName string) (metric Metrics, err error)
 	GetAllMetrics(ctx context.Context) (metrics []Metrics, err error)
 	Ping(ctx context.Context) (err error)

@@ -15,6 +15,7 @@ func NewServerRouter(store storage.Storage) *gin.Engine {
 	engine.Use(middleware.GzipMiddleware(), gin.Recovery())
 
 	engine.POST("/update/", handlers.PostMetricHandlerJSON(store))
+	engine.POST("/updates/", handlers.PostMultipleMetricsHandler(store))
 	engine.POST("/update/:mType/:mName/:mValue", handlers.PostMetricHandler(store))
 
 	engine.POST("/value/", handlers.GetMetricHandlerJSON(store))

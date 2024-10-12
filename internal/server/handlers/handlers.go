@@ -168,3 +168,26 @@ func PingHandler(store storage.Storage) gin.HandlerFunc {
 		}
 	}
 }
+
+func PostMultipleMetricsHandler(store storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var metrics []storage.Metrics
+		if err := c.BindJSON(&metrics); err != nil {
+			errMsg := fmt.Sprintf("Invalid payload. Error: %s", err.Error())
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": errMsg,
+			})
+			return
+		}
+
+		err := store.AddMultipleMetrics(context.TODO(), metrics)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	}
+}

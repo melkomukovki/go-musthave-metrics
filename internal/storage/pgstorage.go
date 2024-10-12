@@ -161,3 +161,52 @@ func (p *PgStorage) Ping(ctx context.Context) (err error) {
 	defer cancel()
 	return p.dbPool.Ping(nCtx)
 }
+
+func (p *PgStorage) AddMultipleMetrics(ctx context.Context, metrics []Metrics) (err error) {
+	nCtx, cancel := context.WithTimeout(ctx, time.Duration(3*time.Second))
+	defer cancel()
+
+	tx, err := p.dbPool.Begin(nCtx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(nCtx)
+
+	for _, metric := range metrics {
+		switch metric.MType {
+		case Gauge:
+			if metric.Value == nil {
+				return ErrMissingField
+			}
+			_, err = tx.Exec(nCtx, sqlAddMetricQuery, metric.ID, Gauge, metric.Value)
+			if err != nil {
+				return err
+			}
+		case Counter:
+			if metric.Delta == nil {
+				return ErrMissingField
+			}
+
+			var mValue int64
+			pMetric, err := p.GetMetric(nCtx, Counter, metric.ID)
+			if err != nil && !errors.Is(err, ErrMetricNotFound) {
+				return err
+			}
+
+			if errors.Is(err, ErrMetricNotFound) {
+				mValue = *metric.Delta
+			} else {
+				mValue = *metric.Delta + *pMetric.Delta
+			}
+			_, err = tx.Exec(nCtx, sqlAddMetricQuery, metric.ID, Counter, strconv.Itoa(int(mValue)))
+			if err != nil {
+				return err
+			}
+		default:
+			return ErrMetricNotSupportedType
+		}
+	}
+
+	err = tx.Commit(nCtx)
+	return err
+}

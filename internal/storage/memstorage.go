@@ -171,3 +171,33 @@ func (m *MemStorage) GetAllMetrics(ctx context.Context) ([]Metrics, error) {
 func (m *MemStorage) Ping(ctx context.Context) error {
 	return nil
 }
+
+func (m *MemStorage) AddMultipleMetrics(ctx context.Context, metrics []Metrics) (err error) {
+	for _, metric := range metrics {
+		switch metric.MType {
+		case Counter:
+			if metric.Delta == nil {
+				return ErrMissingField
+			}
+			tm := CounterMetrics{
+				ID:    metric.ID,
+				MType: Counter,
+				Delta: metric.Delta,
+			}
+			m.addCounterMetric(&tm)
+		case Gauge:
+			if metric.Value == nil {
+				return ErrMissingField
+			}
+			tm := GaugeMetrics{
+				ID:    metric.ID,
+				MType: Gauge,
+				Value: metric.Value,
+			}
+			m.addGaugeMetric(&tm)
+		default:
+			return ErrMetricNotSupportedType
+		}
+	}
+	return nil
+}
