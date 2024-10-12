@@ -166,6 +166,8 @@ func (p *PgStorage) AddMultipleMetrics(ctx context.Context, metrics []Metrics) (
 	nCtx, cancel := context.WithTimeout(ctx, time.Duration(3*time.Second))
 	defer cancel()
 
+	counterMetrics := make(map[string]int64)
+
 	tx, err := p.dbPool.Begin(nCtx)
 	if err != nil {
 		return err
@@ -187,23 +189,25 @@ func (p *PgStorage) AddMultipleMetrics(ctx context.Context, metrics []Metrics) (
 				return ErrMissingField
 			}
 
-			var mValue int64
-			pMetric, err := p.GetMetric(nCtx, Counter, metric.ID)
-			if err != nil && !errors.Is(err, ErrMetricNotFound) {
-				return err
-			}
-
-			if errors.Is(err, ErrMetricNotFound) {
-				mValue = *metric.Delta
-			} else {
-				mValue = *metric.Delta + *pMetric.Delta
-			}
-			_, err = tx.Exec(nCtx, sqlAddMetricQuery, metric.ID, Counter, strconv.Itoa(int(mValue)))
-			if err != nil {
-				return err
-			}
+			counterMetrics[metric.ID] += *metric.Delta
 		default:
 			return ErrMetricNotSupportedType
+		}
+	}
+
+	for metricID, aggregatedValue := range counterMetrics {
+		pMetric, err := p.GetMetric(nCtx, Counter, metricID)
+		if err != nil && !errors.Is(err, ErrMetricNotFound) {
+			return err
+		}
+
+		if !errors.Is(err, ErrMetricNotFound) {
+			aggregatedValue += *pMetric.Delta
+		}
+
+		_, err = tx.Exec(nCtx, sqlAddMetricQuery, metricID, Counter, strconv.Itoa(int(aggregatedValue)))
+		if err != nil {
+			return err
 		}
 	}
 

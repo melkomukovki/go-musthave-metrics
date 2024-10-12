@@ -57,7 +57,7 @@ func createGaugeMetric(id string, value float64, mType string) storage.Metrics {
 
 func (a *Agent) pollMetrics() {
 	a.addPollCounter()
-	// var newAr []storage.Metrics
+
 	var rtm runtime.MemStats
 	runtime.ReadMemStats(&rtm)
 
