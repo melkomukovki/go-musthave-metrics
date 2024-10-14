@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -47,6 +50,23 @@ func NewPgStorage(connectionDSN string) (*PgStorage, error) {
 	return pgStorage, nil
 }
 
+func isRetriableError(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case pgerrcode.ConnectionException,
+			pgerrcode.ConnectionDoesNotExist,
+			pgerrcode.ConnectionFailure,
+			pgerrcode.SQLClientUnableToEstablishSQLConnection,
+			pgerrcode.SQLServerRejectedEstablishmentOfSQLConnection,
+			pgerrcode.TransactionResolutionUnknown,
+			pgerrcode.ProtocolViolation:
+			return true
+		}
+	}
+	return false
+}
+
 func (p *PgStorage) migrate() (err error) {
 	ctx := context.TODO()
 	tx, err := p.dbPool.Begin(ctx)
@@ -62,6 +82,27 @@ func (p *PgStorage) migrate() (err error) {
 
 	err = tx.Commit(ctx)
 	return err
+}
+
+func (p *PgStorage) retry(f func() error) error {
+	const maxRetries = 3
+	var retryInterval = []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
+
+	for i := 0; i <= maxRetries; i++ {
+		err := f()
+		if err == nil {
+			return nil
+		}
+
+		if !isRetriableError(err) {
+			return err
+		}
+
+		if i < maxRetries {
+			time.Sleep(retryInterval[i])
+		}
+	}
+	return nil
 }
 
 func (p *PgStorage) AddMetric(ctx context.Context, metric Metrics) (err error) {
@@ -96,7 +137,10 @@ func (p *PgStorage) AddMetric(ctx context.Context, metric Metrics) (err error) {
 		return ErrMetricNotSupportedType
 	}
 
-	_, err = p.dbPool.Exec(nCtx, sqlAddMetricQuery, mName, mType, mValue)
+	err = p.retry(func() error {
+		_, err = p.dbPool.Exec(nCtx, sqlAddMetricQuery, mName, mType, mValue)
+		return err
+	})
 	return err
 }
 
@@ -108,12 +152,18 @@ func (p *PgStorage) GetMetric(ctx context.Context, metricType, metricName string
 	row := p.dbPool.QueryRow(nCtx, sqlGetMetricQuery, metricName, metricType)
 	switch metricType {
 	case Gauge:
-		err := row.Scan(&m.ID, &m.MType, &m.Value)
+		err := p.retry(func() error {
+			err := row.Scan(&m.ID, &m.MType, &m.Value)
+			return err
+		})
 		if err != nil {
 			return Metrics{}, ErrMetricNotFound
 		}
 	case Counter:
-		err := row.Scan(&m.ID, &m.MType, &m.Delta)
+		err := p.retry(func() error {
+			err := row.Scan(&m.ID, &m.MType, &m.Delta)
+			return err
+		})
 		if err != nil {
 			return Metrics{}, ErrMetricNotFound
 		}
@@ -125,7 +175,12 @@ func (p *PgStorage) GetAllMetrics(ctx context.Context) (metrics []Metrics, err e
 	nCtx, cancel := context.WithTimeout(ctx, time.Duration(3*time.Second))
 	defer cancel()
 
-	rows, err := p.dbPool.Query(nCtx, sqlGetAllMetricsQuery)
+	var rows pgx.Rows
+	err = p.retry(func() error {
+		tRows, err := p.dbPool.Query(nCtx, sqlGetAllMetricsQuery)
+		rows = tRows
+		return err
+	})
 	if err != nil {
 		return []Metrics{}, err
 	}
@@ -168,49 +223,54 @@ func (p *PgStorage) AddMultipleMetrics(ctx context.Context, metrics []Metrics) (
 
 	counterMetrics := make(map[string]int64)
 
-	tx, err := p.dbPool.Begin(nCtx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(nCtx)
-
-	for _, metric := range metrics {
-		switch metric.MType {
-		case Gauge:
-			if metric.Value == nil {
-				return ErrMissingField
-			}
-			_, err = tx.Exec(nCtx, sqlAddMetricQuery, metric.ID, Gauge, metric.Value)
-			if err != nil {
-				return err
-			}
-		case Counter:
-			if metric.Delta == nil {
-				return ErrMissingField
-			}
-
-			counterMetrics[metric.ID] += *metric.Delta
-		default:
-			return ErrMetricNotSupportedType
-		}
-	}
-
-	for metricID, aggregatedValue := range counterMetrics {
-		pMetric, err := p.GetMetric(nCtx, Counter, metricID)
-		if err != nil && !errors.Is(err, ErrMetricNotFound) {
-			return err
-		}
-
-		if !errors.Is(err, ErrMetricNotFound) {
-			aggregatedValue += *pMetric.Delta
-		}
-
-		_, err = tx.Exec(nCtx, sqlAddMetricQuery, metricID, Counter, strconv.Itoa(int(aggregatedValue)))
+	err = p.retry(func() error {
+		tx, err := p.dbPool.Begin(nCtx)
 		if err != nil {
 			return err
 		}
-	}
+		defer tx.Rollback(nCtx)
 
-	err = tx.Commit(nCtx)
+		for _, metric := range metrics {
+			switch metric.MType {
+			case Gauge:
+				if metric.Value == nil {
+					return ErrMissingField
+				}
+				_, err = tx.Exec(nCtx, sqlAddMetricQuery, metric.ID, Gauge, metric.Value)
+				if err != nil {
+					return err
+				}
+			case Counter:
+				if metric.Delta == nil {
+					return ErrMissingField
+				}
+
+				counterMetrics[metric.ID] += *metric.Delta
+			default:
+				return ErrMetricNotSupportedType
+			}
+		}
+
+		for metricID, aggregatedValue := range counterMetrics {
+			pMetric, err := p.GetMetric(nCtx, Counter, metricID)
+			if err != nil && !errors.Is(err, ErrMetricNotFound) {
+				return err
+			}
+
+			if !errors.Is(err, ErrMetricNotFound) {
+				aggregatedValue += *pMetric.Delta
+			}
+
+			_, err = tx.Exec(nCtx, sqlAddMetricQuery, metricID, Counter, strconv.Itoa(int(aggregatedValue)))
+			if err != nil {
+				return err
+			}
+		}
+
+		err = tx.Commit(nCtx)
+		return err
+	})
+
 	return err
+
 }
