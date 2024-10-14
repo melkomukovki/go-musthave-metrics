@@ -132,7 +132,7 @@ func (p *PgStorage) AddMetric(ctx context.Context, metric Metrics) (err error) {
 		}
 
 		mType = Gauge
-		mValue = fmt.Sprintf("%f", *metric.Value)
+		mValue = fmt.Sprintf("%g", *metric.Value)
 	} else {
 		return ErrMetricNotSupportedType
 	}
