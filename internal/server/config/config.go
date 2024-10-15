@@ -64,14 +64,17 @@ func GetServerConfig() (ServerConfig, error) {
 	// Validate file path
 	if cfg.DataSourceName != "" {
 		_, err := os.Stat(cfg.FileStoragePath)
-		if errors.Is(err, os.ErrNotExist) {
-			f, err := os.Create(cfg.FileStoragePath)
-			if err != nil {
-				return ServerConfig{}, err
+
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				f, err := os.Create(cfg.FileStoragePath)
+				if err != nil {
+					return ServerConfig{}, err
+				}
+				f.Close()
+			} else {
+				return ServerConfig{}, nil
 			}
-			f.Close()
-		} else {
-			return ServerConfig{}, err
 		}
 	}
 
