@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -19,8 +20,8 @@ func NewMemStorage(storeInterval int, storePath string, restore bool) *MemStorag
 	}
 
 	newStorage := &MemStorage{
-		GaugeMetrics:   make(map[string]float64),
-		CounterMetrics: make(map[string]int64),
+		GaugeMetrics:   sync.Map{},
+		CounterMetrics: sync.Map{},
 		syncStore:      syncMode,
 		storeInterval:  storeInterval,
 		storePath:      storePath,
@@ -43,8 +44,8 @@ func NewMemStorage(storeInterval int, storePath string, restore bool) *MemStorag
 }
 
 type MemStorage struct {
-	GaugeMetrics   map[string]float64
-	CounterMetrics map[string]int64
+	GaugeMetrics   sync.Map
+	CounterMetrics sync.Map
 	storeInterval  int
 	syncStore      bool
 	storePath      string
@@ -106,37 +107,46 @@ func (m *MemStorage) AddMetric(ctx context.Context, metric Metrics) error {
 }
 
 func (m *MemStorage) addGaugeMetric(metric *GaugeMetrics) {
-	m.GaugeMetrics[metric.ID] = *metric.Value
+	m.GaugeMetrics.Store(metric.ID, *metric.Value)
 }
 
 func (m *MemStorage) addCounterMetric(metric *CounterMetrics) {
-	if val, ok := m.CounterMetrics[metric.ID]; ok {
-		newVal := val + *metric.Delta
-		m.CounterMetrics[metric.ID] = newVal
+	if val, ok := m.CounterMetrics.Load(metric.ID); ok {
+		v, _ := val.(int64)
+		newVal := v + *metric.Delta
+		m.CounterMetrics.Store(metric.ID, newVal)
 	} else {
-		m.CounterMetrics[metric.ID] = *metric.Delta
+		m.CounterMetrics.Store(metric.ID, *metric.Delta)
 	}
 }
 
 func (m *MemStorage) GetMetric(ctx context.Context, mType, mName string) (Metrics, error) {
 	switch mType {
 	case Gauge:
-		if val, ok := m.GaugeMetrics[mName]; ok {
+		if val, ok := m.GaugeMetrics.Load(mName); ok {
+			v, ok := val.(float64)
+			if !ok {
+				return Metrics{}, ErrWrongValue
+			}
 			tm := Metrics{
 				ID:    mName,
 				MType: Gauge,
-				Value: &val,
+				Value: &v,
 			}
 			return tm, nil
 		} else {
 			return Metrics{}, ErrMetricNotFound
 		}
 	case Counter:
-		if val, ok := m.CounterMetrics[mName]; ok {
+		if val, ok := m.CounterMetrics.Load(mName); ok {
+			v, ok := val.(int64)
+			if !ok {
+				return Metrics{}, ErrWrongValue
+			}
 			tm := Metrics{
 				ID:    mName,
 				MType: Counter,
-				Delta: &val,
+				Delta: &v,
 			}
 			return tm, nil
 		} else {
@@ -149,22 +159,37 @@ func (m *MemStorage) GetMetric(ctx context.Context, mType, mName string) (Metric
 
 func (m *MemStorage) GetAllMetrics(ctx context.Context) ([]Metrics, error) {
 	var res []Metrics
-	for k, v := range m.CounterMetrics {
+
+	m.CounterMetrics.Range(func(key, value interface{}) bool {
+		val, ok := value.(int64)
+		if !ok {
+			return false
+		}
 		tm := Metrics{
-			ID:    k,
+			ID:    key.(string),
 			MType: Counter,
-			Delta: &v,
+			Delta: &val,
 		}
 		res = append(res, tm)
-	}
-	for k, v := range m.GaugeMetrics {
+
+		return true
+	})
+
+	m.GaugeMetrics.Range(func(key, value interface{}) bool {
+		val, ok := value.(float64)
+		if !ok {
+			return false
+		}
 		tm := Metrics{
-			ID:    k,
+			ID:    key.(string),
 			MType: Gauge,
-			Value: &v,
+			Value: &val,
 		}
 		res = append(res, tm)
-	}
+
+		return true
+	})
+
 	return res, nil
 }
 

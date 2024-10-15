@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -23,7 +22,7 @@ func PostMetricHandlerJSON(store storage.Storage) gin.HandlerFunc {
 			return
 		}
 
-		err := store.AddMetric(context.TODO(), v)
+		err := store.AddMetric(c, v)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"message": err.Error(),
@@ -31,7 +30,7 @@ func PostMetricHandlerJSON(store storage.Storage) gin.HandlerFunc {
 			return
 		}
 
-		rM, err := store.GetMetric(context.TODO(), v.MType, v.ID)
+		rM, err := store.GetMetric(c, v.MType, v.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": err.Error(),
@@ -57,7 +56,7 @@ func PostMetricHandler(store storage.Storage) gin.HandlerFunc {
 				c.String(http.StatusBadRequest, "Can't convert value %s to float64", mValue)
 			}
 			metric := storage.Metrics{ID: mName, MType: mType, Value: &value}
-			err = store.AddMetric(context.TODO(), metric)
+			err = store.AddMetric(c, metric)
 			if err != nil {
 				c.String(http.StatusBadRequest, "Can't add gauge metric: %s - %s. Error: %s", mName, mValue, err.Error())
 				return
@@ -68,7 +67,7 @@ func PostMetricHandler(store storage.Storage) gin.HandlerFunc {
 				c.String(http.StatusBadRequest, "Can't convert value %s to int64", mValue)
 			}
 			metric := storage.Metrics{ID: mName, MType: mType, Delta: &value}
-			err = store.AddMetric(context.TODO(), metric)
+			err = store.AddMetric(c, metric)
 			if err != nil {
 				c.String(http.StatusBadRequest, "Can't add counter metric: %s - %s. Error: %s", mName, mValue, err.Error())
 				return
@@ -93,7 +92,7 @@ func GetMetricHandlerJSON(store storage.Storage) gin.HandlerFunc {
 			return
 		}
 
-		res, err := store.GetMetric(context.TODO(), v.MType, v.ID)
+		res, err := store.GetMetric(c, v.MType, v.ID)
 		if err != nil {
 			if errors.Is(err, storage.ErrMetricNotFound) {
 				c.JSON(http.StatusNotFound, gin.H{
@@ -117,7 +116,7 @@ func GetMetricHandler(store storage.Storage) gin.HandlerFunc {
 		mType := c.Params.ByName("mType")
 		mName := c.Params.ByName("mName")
 
-		metric, err := store.GetMetric(context.TODO(), mType, mName)
+		metric, err := store.GetMetric(c, mType, mName)
 		if err != nil {
 			c.String(http.StatusNotFound, err.Error())
 			return
@@ -142,7 +141,7 @@ func GetMetricHandler(store storage.Storage) gin.HandlerFunc {
 func ShowMetrics(store storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var result string
-		metrics, err := store.GetAllMetrics(context.TODO())
+		metrics, err := store.GetAllMetrics(c)
 		if err != nil {
 			c.String(http.StatusInternalServerError, "Internal Server Error")
 		}
@@ -160,7 +159,7 @@ func ShowMetrics(store storage.Storage) gin.HandlerFunc {
 
 func PingHandler(store storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		err := store.Ping(context.TODO())
+		err := store.Ping(c)
 		if err != nil {
 			c.String(http.StatusInternalServerError, "Internal Server Error")
 		} else {
@@ -180,7 +179,7 @@ func PostMultipleMetricsHandler(store storage.Storage) gin.HandlerFunc {
 			return
 		}
 
-		err := store.AddMultipleMetrics(context.TODO(), metrics)
+		err := store.AddMultipleMetrics(c, metrics)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"message": err.Error(),

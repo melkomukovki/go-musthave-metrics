@@ -68,7 +68,7 @@ func isRetriableError(err error) bool {
 }
 
 func (p *PgStorage) migrate() (err error) {
-	ctx := context.TODO()
+	ctx := context.Background()
 	tx, err := p.dbPool.Begin(ctx)
 	if err != nil {
 		return err
