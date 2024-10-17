@@ -1,64 +1,84 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
+	"sync"
+	"time"
 )
 
-// Validate implimentation
-var _ Storage = MemStorage{}
+var (
+	_ Storage = &MemStorage{}
+)
 
-func NewMemStorage(storeInterval int, storePath string) *MemStorage {
-	var sStore = false
+func NewMemStorage(storeInterval int, storePath string, restore bool) *MemStorage {
+	var syncMode = false
 	if storeInterval == 0 {
-		sStore = true
+		syncMode = true
 	}
-	return &MemStorage{
-		GaugeMetrics:   make(map[string]float64),
-		CounterMetrics: make(map[string]int64),
-		SyncStore:      sStore,
+
+	newStorage := &MemStorage{
+		GaugeMetrics:   sync.Map{},
+		CounterMetrics: sync.Map{},
+		syncStore:      syncMode,
 		storeInterval:  storeInterval,
-		StorePath:      storePath,
+		storePath:      storePath,
 	}
+
+	if restore {
+		newStorage.restoreStorage()
+	}
+
+	if !newStorage.syncStore {
+		go func() {
+			for {
+				time.Sleep(time.Duration(newStorage.storeInterval) * time.Second)
+				newStorage.BackupMetrics()
+			}
+		}()
+	}
+
+	return newStorage
 }
 
 type MemStorage struct {
-	GaugeMetrics   map[string]float64
-	CounterMetrics map[string]int64
+	GaugeMetrics   sync.Map
+	CounterMetrics sync.Map
 	storeInterval  int
-	SyncStore      bool
-	StorePath      string
+	syncStore      bool
+	storePath      string
 }
 
-func (m MemStorage) RestoreStorage() error {
+func (m *MemStorage) restoreStorage() error {
 	metrics := []Metrics{}
-	data, err := os.ReadFile(m.StorePath)
+	data, err := os.ReadFile(m.storePath)
 	if err != nil {
 		return err
 	}
 	json.Unmarshal(data, &metrics)
 	for _, rm := range metrics {
-		m.AddMetric(rm)
+		m.AddMetric(context.TODO(), rm)
 	}
 	return nil
 }
 
-func (m MemStorage) BackupMetrics() error {
-	allMetrics := m.GetAllMetrics()
+func (m *MemStorage) BackupMetrics() error {
+	allMetrics, _ := m.GetAllMetrics(context.TODO())
 	mJSON, err := json.Marshal(allMetrics)
 	if err != nil {
 		return err
 	}
-	os.WriteFile(m.StorePath, mJSON, 0666)
+	os.WriteFile(m.storePath, mJSON, 0666)
 	return nil
 }
 
-func (m MemStorage) AddMetric(metric Metrics) error {
+func (m *MemStorage) AddMetric(ctx context.Context, metric Metrics) error {
 	switch metric.MType {
 	case Gauge:
 		if metric.Value == nil {
-			return errors.New("field 'value' can't be empty for metric with type gauge")
+			return ErrMissingField
 		}
 		tm := GaugeMetrics{
 			ID:    metric.ID,
@@ -68,7 +88,7 @@ func (m MemStorage) AddMetric(metric Metrics) error {
 		m.addGaugeMetric(&tm)
 	case Counter:
 		if metric.Delta == nil {
-			return errors.New("field 'delta' can't be empty for metric with type counter ")
+			return ErrMissingField
 		}
 		tm := CounterMetrics{
 			ID:    metric.ID,
@@ -80,71 +100,129 @@ func (m MemStorage) AddMetric(metric Metrics) error {
 		return errors.New("not supported metric type")
 	}
 
-	if m.SyncStore {
+	if m.syncStore {
 		m.BackupMetrics()
 	}
 	return nil
 }
 
-func (m MemStorage) addGaugeMetric(metric *GaugeMetrics) {
-	m.GaugeMetrics[metric.ID] = *metric.Value
+func (m *MemStorage) addGaugeMetric(metric *GaugeMetrics) {
+	m.GaugeMetrics.Store(metric.ID, *metric.Value)
 }
 
-func (m MemStorage) addCounterMetric(metric *CounterMetrics) {
-	if val, ok := m.CounterMetrics[metric.ID]; ok {
-		newVal := val + *metric.Delta
-		m.CounterMetrics[metric.ID] = newVal
+func (m *MemStorage) addCounterMetric(metric *CounterMetrics) {
+	if val, ok := m.CounterMetrics.Load(metric.ID); ok {
+		v, _ := val.(int64)
+		newVal := v + *metric.Delta
+		m.CounterMetrics.Store(metric.ID, newVal)
 	} else {
-		m.CounterMetrics[metric.ID] = *metric.Delta
+		m.CounterMetrics.Store(metric.ID, *metric.Delta)
 	}
 }
 
-func (m MemStorage) GetMetric(mType, mName string) (Metrics, error) {
+func (m *MemStorage) GetMetric(ctx context.Context, mType, mName string) (Metrics, error) {
 	switch mType {
 	case Gauge:
-		if val, ok := m.GaugeMetrics[mName]; ok {
+		if val, ok := m.GaugeMetrics.Load(mName); ok {
+			v, ok := val.(float64)
+			if !ok {
+				return Metrics{}, ErrWrongValue
+			}
 			tm := Metrics{
 				ID:    mName,
 				MType: Gauge,
-				Value: &val,
+				Value: &v,
 			}
 			return tm, nil
 		} else {
-			return Metrics{}, errors.New("metric not found")
+			return Metrics{}, ErrMetricNotFound
 		}
 	case Counter:
-		if val, ok := m.CounterMetrics[mName]; ok {
+		if val, ok := m.CounterMetrics.Load(mName); ok {
+			v, ok := val.(int64)
+			if !ok {
+				return Metrics{}, ErrWrongValue
+			}
 			tm := Metrics{
 				ID:    mName,
 				MType: Counter,
-				Delta: &val,
+				Delta: &v,
 			}
 			return tm, nil
 		} else {
-			return Metrics{}, errors.New("metric not found")
+			return Metrics{}, ErrMetricNotFound
 		}
 	default:
-		return Metrics{}, errors.New("not supported metric type")
+		return Metrics{}, ErrMetricNotSupportedType
 	}
 }
 
-func (m MemStorage) GetAllMetrics() []Metrics {
+func (m *MemStorage) GetAllMetrics(ctx context.Context) ([]Metrics, error) {
 	var res []Metrics
-	for k, v := range m.CounterMetrics {
+
+	m.CounterMetrics.Range(func(key, value interface{}) bool {
+		val, ok := value.(int64)
+		if !ok {
+			return false
+		}
 		tm := Metrics{
-			ID:    k,
+			ID:    key.(string),
 			MType: Counter,
-			Delta: &v,
+			Delta: &val,
 		}
 		res = append(res, tm)
-	}
-	for k, v := range m.GaugeMetrics {
+
+		return true
+	})
+
+	m.GaugeMetrics.Range(func(key, value interface{}) bool {
+		val, ok := value.(float64)
+		if !ok {
+			return false
+		}
 		tm := Metrics{
-			ID:    k,
+			ID:    key.(string),
 			MType: Gauge,
-			Value: &v,
+			Value: &val,
 		}
 		res = append(res, tm)
+
+		return true
+	})
+
+	return res, nil
+}
+
+func (m *MemStorage) Ping(ctx context.Context) error {
+	return nil
+}
+
+func (m *MemStorage) AddMultipleMetrics(ctx context.Context, metrics []Metrics) (err error) {
+	for _, metric := range metrics {
+		switch metric.MType {
+		case Counter:
+			if metric.Delta == nil {
+				return ErrMissingField
+			}
+			tm := CounterMetrics{
+				ID:    metric.ID,
+				MType: Counter,
+				Delta: metric.Delta,
+			}
+			m.addCounterMetric(&tm)
+		case Gauge:
+			if metric.Value == nil {
+				return ErrMissingField
+			}
+			tm := GaugeMetrics{
+				ID:    metric.ID,
+				MType: Gauge,
+				Value: metric.Value,
+			}
+			m.addGaugeMetric(&tm)
+		default:
+			return ErrMetricNotSupportedType
+		}
 	}
-	return res
+	return nil
 }

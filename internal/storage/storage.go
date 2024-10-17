@@ -1,16 +1,28 @@
 package storage
 
+import (
+	"context"
+	"errors"
+)
+
 const (
 	Gauge   = "gauge"
 	Counter = "counter"
 )
 
+var (
+	ErrMetricNotFound         = errors.New("metric not found")
+	ErrMetricNotSupportedType = errors.New("not supported metric type")
+	ErrMissingField           = errors.New("missing field")
+	ErrWrongValue             = errors.New("wrong metric value")
+)
+
 type Storage interface {
-	AddMetric(metric Metrics) (err error)
-	GetMetric(metricType, metricName string) (metric Metrics, err error)
-	GetAllMetrics() (metrics []Metrics)
-	RestoreStorage() error
-	BackupMetrics() error
+	AddMetric(ctx context.Context, metric Metrics) (err error)
+	AddMultipleMetrics(ctx context.Context, metrics []Metrics) (err error)
+	GetMetric(ctx context.Context, metricType, metricName string) (metric Metrics, err error)
+	GetAllMetrics(ctx context.Context) (metrics []Metrics, err error)
+	Ping(ctx context.Context) (err error)
 }
 
 type Metrics struct {
