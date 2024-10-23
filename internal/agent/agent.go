@@ -3,6 +3,9 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
@@ -31,6 +34,10 @@ func NewAgent(cfg *config.ClientConfig) *Agent {
 	}
 }
 
+func (a *Agent) needHash() bool {
+	return a.config.HashKey != ""
+}
+
 func (a *Agent) addPollCounter() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -43,13 +50,13 @@ func (a *Agent) resetPollCounter() {
 	a.pollCounter = 0
 }
 
-func (a *Agent) GetPollInterval() int {
-	return a.config.PollInterval
-}
+// func (a *Agent) GetPollInterval() int {
+// 	return a.config.PollInterval
+// }
 
-func (a *Agent) GetReportInterval() int {
-	return a.config.ReportInterval
-}
+// func (a *Agent) GetReportInterval() int {
+// 	return a.config.ReportInterval
+// }
 
 func createGaugeMetric(id string, value float64, mType string) storage.Metrics {
 	return storage.Metrics{ID: id, MType: mType, Value: &value}
@@ -107,6 +114,12 @@ func (a *Agent) pollMetrics() {
 	a.metrics = newAr
 }
 
+func (a *Agent) getHash(data []byte) []byte {
+	h := hmac.New(sha256.New, []byte(a.config.HashKey))
+	h.Write(data)
+	return h.Sum(nil)
+}
+
 func (a *Agent) reportMetrics(c *resty.Client) {
 	url := fmt.Sprintf("http://%s/updates/", a.config.Address)
 
@@ -117,6 +130,11 @@ func (a *Agent) reportMetrics(c *resty.Client) {
 	}
 
 	mMarshaled, _ := json.Marshal(a.metrics)
+	if a.needHash() {
+		hashString := a.getHash(mMarshaled)
+		headers["HashSHA256"] = hex.EncodeToString(hashString)
+	}
+
 	compressedData, err := gzipData(mMarshaled)
 	if err != nil {
 		fmt.Printf("Error sending metrics. Error: %s\n", err.Error())
@@ -132,8 +150,16 @@ func (a *Agent) reportMetrics(c *resty.Client) {
 		return
 	}
 	fmt.Printf("Metrics was sended. Status code: %d\n", resp.StatusCode())
+	fmt.Println(resp.Header())
 	a.resetPollCounter()
 }
+
+// func unzipData(data string) string {
+// 	reader := bytes.NewReader([]byte(data))
+// 	gzreader, _ := gzip.NewReader(reader)
+// 	output, _ := io.ReadAll(gzreader)
+// 	return string(output)
+// }
 
 func (a *Agent) Run(cResty *resty.Client) {
 	pollTicker := time.NewTicker(time.Duration(a.config.PollInterval) * time.Second)

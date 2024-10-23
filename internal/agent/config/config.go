@@ -11,12 +11,14 @@ const (
 	DefaultAddress        = "localhost:8080"
 	DefaultPollInterval   = 2
 	DefaultReportInterval = 10
+	DefaultHashKey        = ""
 )
 
 type ClientConfig struct {
 	Address        string `env:"ADDRESS"`
 	ReportInterval int    `env:"REPORT_INTERVAL"`
 	PollInterval   int    `env:"POLL_INTERVAL"`
+	HashKey        string `env:"KEY"`
 }
 
 func GetClientConfig() (ClientConfig, error) {
@@ -25,6 +27,7 @@ func GetClientConfig() (ClientConfig, error) {
 	flag.StringVar(&cfg.Address, "a", DefaultAddress, "Server address and port")
 	flag.IntVar(&cfg.ReportInterval, "r", DefaultReportInterval, "Report interval (sec)")
 	flag.IntVar(&cfg.PollInterval, "p", DefaultPollInterval, "Poll metric interval (sec)")
+	flag.StringVar(&cfg.HashKey, "k", DefaultHashKey, "Hash key for calculation HashSHA256 header")
 	flag.Parse()
 
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
@@ -43,6 +46,10 @@ func GetClientConfig() (ClientConfig, error) {
 			return ClientConfig{}, fmt.Errorf("invalid value for env variavle `POLL_INTERVAL`")
 		}
 		cfg.PollInterval = iPollInterval
+	}
+
+	if envHashKey := os.Getenv("KEY"); envHashKey != "" {
+		cfg.HashKey = envHashKey
 	}
 
 	if cfg.PollInterval <= 0 || cfg.PollInterval > 100 {

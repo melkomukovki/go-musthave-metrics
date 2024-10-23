@@ -20,6 +20,8 @@ func LoggerMiddleware() gin.HandlerFunc {
 		latency := fmt.Sprintf("%.3fs", latencyRaw)
 		clientIP := c.ClientIP()
 		method := c.Request.Method
+		hashInHeader := c.Request.Header.Get("HashSHA256")
+		hashOutHeader := c.Writer.Header().Get("HashSHA256")
 		statusCode := c.Writer.Status()
 		bodySize := c.Writer.Size()
 
@@ -30,6 +32,8 @@ func LoggerMiddleware() gin.HandlerFunc {
 			Int("statusCode", statusCode).
 			Str("requestTime", latency).
 			Int("bodySizeBytes", bodySize).
+			Str("hashIn", hashInHeader).
+			Str("hashOut", hashOutHeader).
 			Msg("request recived")
 	}
 

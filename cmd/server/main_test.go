@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/melkomukovki/go-musthave-metrics/internal/server"
-	"github.com/melkomukovki/go-musthave-metrics/internal/storage"
+	"github.com/melkomukovki/go-musthave-metrics/internal/server/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -48,16 +48,16 @@ func TestPostMetricHandler(t *testing.T) {
 		},
 	}
 
-	var store = storage.NewMemStorage(300, "test.txt", false)
+	cfg, _ := config.GetServerConfig()
 
-	r := server.NewServerRouter(store)
+	r, _ := server.New(&cfg)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			req, _ := http.NewRequest("POST", tt.url, nil)
 			req.Header.Add("Content-Type", "text/plain")
-			r.ServeHTTP(w, req)
+			r.Engine.ServeHTTP(w, req)
 			assert.Equal(t, tt.want.code, w.Code)
 			assert.True(t, strings.Contains(w.Header().Get("Content-Type"), tt.want.contentType))
 		})
@@ -77,9 +77,9 @@ func TestGetMetricHandler(t *testing.T) {
 		"/update/gauge/testGauge/333.12345",
 	}
 
-	var store = storage.NewMemStorage(300, "test.txt", false)
+	cfg, _ := config.GetServerConfig()
 
-	r := server.NewServerRouter(store)
+	r, _ := server.New(&cfg)
 
 	tests := []struct {
 		name string
@@ -121,12 +121,12 @@ func TestGetMetricHandler(t *testing.T) {
 			for _, rd := range data {
 				req, _ := http.NewRequest("POST", rd, nil)
 				req.Header.Add("Content-Type", "text/plain")
-				r.ServeHTTP(tW, req)
+				r.Engine.ServeHTTP(tW, req)
 			}
 			w := httptest.NewRecorder()
 			req, _ := http.NewRequest("GET", tt.url, nil)
 			req.Header.Add("Content-Type", "text/plain")
-			r.ServeHTTP(w, req)
+			r.Engine.ServeHTTP(w, req)
 
 			assert.Equal(t, tt.want.code, w.Code)
 			assert.True(t, strings.Contains(w.Header().Get("Content-Type"), tt.want.contentType))
