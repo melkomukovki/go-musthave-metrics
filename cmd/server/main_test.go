@@ -205,10 +205,10 @@ func TestPostMetricHandlerJSON(t *testing.T) {
 		hashHeader  string
 	}
 
-	var testGaugeValue float64 = 123.123
+	var testGaugeValue = 123.123
 	var testCounterValue int64 = 123
-	var updateURL string = "/update/"
-	var hashKey string = "testkey"
+	var updateURL = "/update/"
+	var hashKey = "testkey"
 
 	tests := []struct {
 		name   string
