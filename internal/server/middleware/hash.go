@@ -32,7 +32,7 @@ func (w *bodyWriter) WriteHeader(statusCode int) {
 
 func HashSumMiddleware(hashKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.Request.Method == http.MethodPost {
+		if c.Request.Method == http.MethodPost && c.GetHeader("HashSHA256") != "" {
 
 			rawBody, err := io.ReadAll(c.Request.Body)
 			if err != nil {
