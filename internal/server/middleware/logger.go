@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"fmt"
+	"net/http/httputil"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -39,6 +40,12 @@ func LoggerMiddleware() gin.HandlerFunc {
 		statusCode := c.Writer.Status()
 		bodySize := c.Writer.Size()
 		respBody := blw.body.String()
+
+		requestDump, err := httputil.DumpRequest(c.Request, true)
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println(string(requestDump))
 
 		log.Info().
 			Str("clientIP", clientIP).
