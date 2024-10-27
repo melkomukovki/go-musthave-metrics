@@ -62,12 +62,6 @@ func HashSumMiddleware(hashKey string) gin.HandlerFunc {
 
 		c.Next()
 
-		// respBody := bw.body.Bytes()
-		// respHash := getHash(respBody, hashKey)
-		// respHashStr := hex.EncodeToString(respHash)
-
-		// c.Header("HashSHA256", respHashStr)
-
 	}
 }
 

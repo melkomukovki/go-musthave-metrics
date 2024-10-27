@@ -84,7 +84,7 @@ func (p *PgStorage) migrate() (err error) {
 	return err
 }
 
-func (p *PgStorage) retry(f func() error) error {
+func (p *PgStorage) retryOperation(f func() error) error {
 	const maxRetries = 3
 	var retryInterval = []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
 
@@ -137,7 +137,7 @@ func (p *PgStorage) AddMetric(ctx context.Context, metric Metrics) (err error) {
 		return ErrMetricNotSupportedType
 	}
 
-	err = p.retry(func() error {
+	err = p.retryOperation(func() error {
 		_, err = p.dbPool.Exec(nCtx, sqlAddMetricQuery, mName, mType, mValue)
 		return err
 	})
@@ -152,7 +152,7 @@ func (p *PgStorage) GetMetric(ctx context.Context, metricType, metricName string
 	row := p.dbPool.QueryRow(nCtx, sqlGetMetricQuery, metricName, metricType)
 	switch metricType {
 	case Gauge:
-		err := p.retry(func() error {
+		err := p.retryOperation(func() error {
 			err := row.Scan(&m.ID, &m.MType, &m.Value)
 			return err
 		})
@@ -160,7 +160,7 @@ func (p *PgStorage) GetMetric(ctx context.Context, metricType, metricName string
 			return Metrics{}, ErrMetricNotFound
 		}
 	case Counter:
-		err := p.retry(func() error {
+		err := p.retryOperation(func() error {
 			err := row.Scan(&m.ID, &m.MType, &m.Delta)
 			return err
 		})
@@ -176,7 +176,7 @@ func (p *PgStorage) GetAllMetrics(ctx context.Context) (metrics []Metrics, err e
 	defer cancel()
 
 	var rows pgx.Rows
-	err = p.retry(func() error {
+	err = p.retryOperation(func() error {
 		tRows, err := p.dbPool.Query(nCtx, sqlGetAllMetricsQuery)
 		rows = tRows
 		return err
@@ -223,7 +223,7 @@ func (p *PgStorage) AddMultipleMetrics(ctx context.Context, metrics []Metrics) (
 
 	counterMetrics := make(map[string]int64)
 
-	err = p.retry(func() error {
+	err = p.retryOperation(func() error {
 		tx, err := p.dbPool.Begin(nCtx)
 		if err != nil {
 			return err

@@ -19,6 +19,8 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/melkomukovki/go-musthave-metrics/internal/agent/config"
 	"github.com/melkomukovki/go-musthave-metrics/internal/storage"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 type Agent struct {
@@ -26,16 +28,17 @@ type Agent struct {
 	pollCounter int64
 	metrics     []storage.Metrics
 	config      *config.ClientConfig
+	workerPool  chan func()
 }
 
 func NewAgent(cfg *config.ClientConfig) *Agent {
-	return &Agent{
-		config: cfg,
+	agent := &Agent{
+		config:     cfg,
+		workerPool: make(chan func(), cfg.RateLimit),
 	}
-}
+	agent.createWorkerPool()
 
-func (a *Agent) needHash() bool {
-	return a.config.HashKey != ""
+	return agent
 }
 
 func (a *Agent) addPollCounter() {
@@ -50,16 +53,41 @@ func (a *Agent) resetPollCounter() {
 	a.pollCounter = 0
 }
 
-// func (a *Agent) GetPollInterval() int {
-// 	return a.config.PollInterval
-// }
-
-// func (a *Agent) GetReportInterval() int {
-// 	return a.config.ReportInterval
-// }
-
 func createGaugeMetric(id string, value float64, mType string) storage.Metrics {
 	return storage.Metrics{ID: id, MType: mType, Value: &value}
+}
+
+func (a *Agent) pollAdditionalMetrics() []storage.Metrics {
+	var sMetrics []storage.Metrics
+
+	v, err := mem.VirtualMemory()
+	if err != nil {
+		fmt.Printf("Error collecting memory metrics: %s\n", err.Error())
+	}
+
+	metricsData := []struct {
+		id    string
+		value float64
+	}{
+		{"TotalMemory", float64(v.Total)},
+		{"FreeMemory", float64(v.Free)},
+	}
+
+	for _, m := range metricsData {
+		sMetrics = append(sMetrics, createGaugeMetric(m.id, m.value, storage.Gauge))
+	}
+
+	cpuPercentages, err := cpu.Percent(0, true)
+	if err != nil {
+		fmt.Printf("Error collecting CPU metrics: %s\n", err.Error())
+	}
+
+	for i, m := range cpuPercentages {
+		id := fmt.Sprintf("CPUutilization%d", i+1)
+		sMetrics = append(sMetrics, createGaugeMetric(id, m, storage.Gauge))
+	}
+
+	return sMetrics
 }
 
 func (a *Agent) pollMetrics() {
@@ -109,57 +137,64 @@ func (a *Agent) pollMetrics() {
 
 	newAr = append(newAr, storage.Metrics{ID: "PollCount", MType: storage.Counter, Delta: &a.pollCounter})
 
+	newAr = append(newAr, a.pollAdditionalMetrics()...)
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.metrics = newAr
 }
 
-func (a *Agent) getHash(data []byte) []byte {
+func (a *Agent) getHash(data []byte) string {
 	h := hmac.New(sha256.New, []byte(a.config.HashKey))
 	h.Write(data)
-	return h.Sum(nil)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func (a *Agent) createWorkerPool() {
+	for i := 0; i < a.config.RateLimit; i++ {
+		go func() {
+			for task := range a.workerPool {
+				task()
+			}
+		}()
+	}
 }
 
 func (a *Agent) reportMetrics(c *resty.Client) {
-	url := fmt.Sprintf("http://%s/updates/", a.config.Address)
+	a.workerPool <- func() {
+		url := fmt.Sprintf("http://%s/updates/", a.config.Address)
 
-	headers := map[string]string{
-		"Content-Type":     "application/json",
-		"Content-Encoding": "gzip",
-		"Accept-Encoding":  "gzip",
-	}
+		headers := map[string]string{
+			"Content-Type":     "application/json",
+			"Content-Encoding": "gzip",
+			"Accept-Encoding":  "gzip",
+		}
 
-	mMarshaled, _ := json.Marshal(a.metrics)
-	if a.needHash() {
-		hashString := a.getHash(mMarshaled)
-		headers["HashSHA256"] = hex.EncodeToString(hashString)
-	}
+		mMarshaled, _ := json.Marshal(a.metrics)
+		if a.config.HashKey != "" {
+			hashString := a.getHash(mMarshaled)
+			headers["HashSHA256"] = hashString
+		}
 
-	compressedData, err := gzipData(mMarshaled)
-	if err != nil {
-		fmt.Printf("Error sending metrics. Error: %s\n", err.Error())
-		return
-	}
+		compressedData, err := gzipData(mMarshaled)
+		if err != nil {
+			fmt.Printf("Error sending metrics. Error: %s\n", err.Error())
+			return
+		}
 
-	resp, err := c.R().
-		SetBody(compressedData).
-		SetHeaders(headers).
-		Post(url)
-	if err != nil {
-		fmt.Printf("Error sending metrics. Detected error: %s\n", err.Error())
-		return
+		resp, err := c.R().
+			SetBody(compressedData).
+			SetHeaders(headers).
+			Post(url)
+		if err != nil {
+			fmt.Printf("Error sending metrics. Detected error: %s\n", err.Error())
+			return
+		}
+		fmt.Printf("Metrics was sended. Status code: %d\n", resp.StatusCode())
+		fmt.Println(resp.Header())
+		a.resetPollCounter()
 	}
-	fmt.Printf("Metrics was sended. Status code: %d\n", resp.StatusCode())
-	fmt.Println(resp.Header())
-	a.resetPollCounter()
 }
-
-// func unzipData(data string) string {
-// 	reader := bytes.NewReader([]byte(data))
-// 	gzreader, _ := gzip.NewReader(reader)
-// 	output, _ := io.ReadAll(gzreader)
-// 	return string(output)
-// }
 
 func (a *Agent) Run(cResty *resty.Client) {
 	pollTicker := time.NewTicker(time.Duration(a.config.PollInterval) * time.Second)
@@ -179,6 +214,7 @@ func (a *Agent) Run(cResty *resty.Client) {
 	for {
 		select {
 		case <-sigsEnd:
+			close(a.workerPool)
 			return
 		case <-pollTicker.C:
 			a.pollMetrics()

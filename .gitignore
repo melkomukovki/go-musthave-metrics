@@ -27,3 +27,4 @@ vendor/
 
 # Test
 statictest-darwin-arm64
+cover.html
