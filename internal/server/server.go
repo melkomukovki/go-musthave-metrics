@@ -51,9 +51,9 @@ func (s *Server) setEngine() {
 	engine := gin.New()
 
 	engine.Use(middleware.LoggerMiddleware(), gin.Recovery())
-	engine.Use(middleware.GzipMiddleware(), gin.Recovery())
+	engine.Use(middleware.GzipMiddleware())
 	if s.cfg.HashKey != "" {
-		engine.Use(middleware.HashSumMiddleware(s.cfg.HashKey), gin.Recovery())
+		engine.Use(middleware.HashSumMiddleware(s.cfg.HashKey))
 	}
 
 	engine.POST("/update/", handlers.PostMetricHandlerJSON(s.store))
