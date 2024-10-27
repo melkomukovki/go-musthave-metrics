@@ -19,9 +19,7 @@ func (c *compressWriter) Write(data []byte) (int, error) {
 }
 
 func (c *compressWriter) WriteHeader(statusCode int) {
-	if statusCode < 300 {
-		c.ResponseWriter.Header().Set("Content-Encoding", "gzip")
-	}
+	c.ResponseWriter.Header().Set("Content-Encoding", "gzip")
 	c.ResponseWriter.WriteHeader(statusCode)
 }
 
