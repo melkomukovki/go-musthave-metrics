@@ -3,7 +3,6 @@ package middleware
 import (
 	"bytes"
 	"fmt"
-	"net/http/httputil"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -22,12 +21,6 @@ func (w bodyLogWriter) Write(b []byte) (int, error) {
 
 func LoggerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		requestDump, err := httputil.DumpRequest(c.Request, true)
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println(string(requestDump))
-
 		start := time.Now()
 		path := c.Request.URL.Path
 
