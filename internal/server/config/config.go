@@ -15,6 +15,7 @@ const (
 	DefaultFileStoragePath = "storefile.json"
 	DefaultRestore         = true
 	DefaultDSN             = ""
+	DefaultHashKey         = ""
 )
 
 type ServerConfig struct {
@@ -23,6 +24,7 @@ type ServerConfig struct {
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	Restore         bool   `env:"RESTORE"`
 	DataSourceName  string `env:"DATABASE_DSN"`
+	HashKey         string `env:"KEY"`
 }
 
 func GetServerConfig() (ServerConfig, error) {
@@ -33,6 +35,7 @@ func GetServerConfig() (ServerConfig, error) {
 	flag.StringVar(&cfg.FileStoragePath, "f", DefaultFileStoragePath, "File with metrics")
 	flag.BoolVar(&cfg.Restore, "r", DefaultRestore, "Restore from file (bool)")
 	flag.StringVar(&cfg.DataSourceName, "d", DefaultDSN, "Database DSN")
+	flag.StringVar(&cfg.HashKey, "k", DefaultHashKey, "Hash key for calculation HashSHA256 header")
 	flag.Parse()
 
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
@@ -59,6 +62,10 @@ func GetServerConfig() (ServerConfig, error) {
 	}
 	if envDatabaseDSN := os.Getenv("DATABASE_DSN"); envDatabaseDSN != "" {
 		cfg.DataSourceName = envDatabaseDSN
+	}
+
+	if envHashKey := os.Getenv("KEY"); envHashKey != "" {
+		cfg.HashKey = envHashKey
 	}
 
 	// Validate file path
