@@ -3,12 +3,13 @@ package server
 import (
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
+
 	"github.com/melkomukovki/go-musthave-metrics/internal/config"
 	"github.com/melkomukovki/go-musthave-metrics/internal/controllers"
 	"github.com/melkomukovki/go-musthave-metrics/internal/infra/memstorage"
 	"github.com/melkomukovki/go-musthave-metrics/internal/infra/postgres"
 	"github.com/melkomukovki/go-musthave-metrics/internal/services"
-	"github.com/rs/zerolog/log"
 )
 
 func Run() {

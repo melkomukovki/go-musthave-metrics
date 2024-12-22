@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+
 	"github.com/melkomukovki/go-musthave-metrics/internal/agent"
 	"github.com/melkomukovki/go-musthave-metrics/internal/agent/config"
 )

@@ -3,13 +3,15 @@ package controllers
 import (
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/melkomukovki/go-musthave-metrics/internal/controllers/middleware"
-	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
-	"github.com/melkomukovki/go-musthave-metrics/internal/services"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/melkomukovki/go-musthave-metrics/internal/controllers/middleware"
+	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
+	"github.com/melkomukovki/go-musthave-metrics/internal/services"
 )
 
 type AppHandler struct {

@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
 	"math/rand/v2"
 	"os"
 	"os/signal"
@@ -17,10 +16,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
+
 	"github.com/go-resty/resty/v2"
-	"github.com/melkomukovki/go-musthave-metrics/internal/agent/config"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
+
+	"github.com/melkomukovki/go-musthave-metrics/internal/agent/config"
 )
 
 type Agent struct {

@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
 	"strconv"
+
+	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
 )
 
 func (s *Service) AddMetric(ctx context.Context, metric entities.Metrics) (err error) {

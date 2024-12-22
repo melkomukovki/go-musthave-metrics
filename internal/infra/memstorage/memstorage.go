@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
 )
 
 func NewClient(storeInterval int, storePath string, restore bool) *MemStorage {
