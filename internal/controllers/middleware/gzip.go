@@ -15,6 +15,7 @@ type compressWriter struct {
 }
 
 func (c *compressWriter) Write(data []byte) (int, error) {
+
 	return c.zw.Write(data)
 }
 
@@ -25,32 +26,22 @@ func (c *compressWriter) WriteHeader(statusCode int) {
 
 func GzipMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		contentEncoding := c.GetHeader("Content-Encoding")
-		recivedGzip := strings.Contains(contentEncoding, "gzip")
-
-		if recivedGzip {
+		if strings.Contains(c.GetHeader("Content-Encoding"), "gzip") {
 			gzipReader, err := gzip.NewReader(c.Request.Body)
 			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 					"message": "invalid gzip format",
 				})
-				c.Abort()
 				return
 			}
 			defer gzipReader.Close()
 			c.Request.Body = io.NopCloser(gzipReader)
 		}
 
-		acceptEncoding := c.GetHeader("Accept-Encoding")
-		supportsGzip := strings.Contains(acceptEncoding, "gzip")
-
-		if supportsGzip {
-			cw := &compressWriter{
-				ResponseWriter: c.Writer,
-				zw:             gzip.NewWriter(c.Writer),
-			}
-			c.Writer = cw
-			defer cw.zw.Close()
+		if strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
+			gzipWriter := gzip.NewWriter(c.Writer)
+			defer gzipWriter.Close()
+			c.Writer = &compressWriter{ResponseWriter: c.Writer, zw: gzipWriter}
 		}
 		c.Next()
 	}

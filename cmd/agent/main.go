@@ -16,7 +16,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	agent := agent.NewAgent(&cfg)
+	app := agent.NewAgent(&cfg)
 
 	client := resty.New()
 	client.SetRetryCount(3).
@@ -25,5 +25,5 @@ func main() {
 		SetRetryAfter(func(client *resty.Client, resp *resty.Response) (time.Duration, error) {
 			return 0, errors.New("quota exceeded")
 		})
-	agent.Run(client)
+	app.Run(client)
 }

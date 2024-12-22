@@ -1,79 +1,42 @@
 package server
 
 import (
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
-	"github.com/melkomukovki/go-musthave-metrics/internal/server/config"
-	"github.com/melkomukovki/go-musthave-metrics/internal/server/handlers"
-	"github.com/melkomukovki/go-musthave-metrics/internal/server/middleware"
-	"github.com/melkomukovki/go-musthave-metrics/internal/storage"
+	"github.com/melkomukovki/go-musthave-metrics/internal/config"
+	"github.com/melkomukovki/go-musthave-metrics/internal/controllers"
+	"github.com/melkomukovki/go-musthave-metrics/internal/infra/memstorage"
+	"github.com/melkomukovki/go-musthave-metrics/internal/infra/postgres"
+	"github.com/melkomukovki/go-musthave-metrics/internal/services"
 	"github.com/rs/zerolog/log"
 )
 
-type Server struct {
-	Engine *gin.Engine // Test purpose
-	cfg    *config.ServerConfig
-	store  storage.Storage
-}
-
-func New(cfg *config.ServerConfig) (*Server, error) {
-	srv := &Server{
-		cfg: cfg,
-	}
-
-	err := srv.setStorage()
+func Run() {
+	cfg, err := config.GetServerConfig()
 	if err != nil {
-		return nil, err
+		log.Fatal().Err(err).Msg("config error. can't initialize config")
 	}
 
-	srv.setEngine()
-
-	return srv, nil
-}
-
-func (s *Server) setStorage() error {
-	if s.cfg.DataSourceName != "" {
-		nStore, err := storage.NewPgStorage(s.cfg.DataSourceName)
+	var serviceRepository services.ServiceRepository
+	if cfg.DataSourceName != "" {
+		store, err := postgres.NewClient(cfg.DataSourceName)
 		if err != nil {
-			return err
+			log.Fatal().Err(err).Msg("can't initialize postgresql storage")
 		}
-		s.store = nStore
-		log.Info().Msg("Initialized postgresql storage")
+		serviceRepository = &postgres.PgRepository{DB: store}
 	} else {
-		nStore := storage.NewMemStorage(s.cfg.StoreInterval, s.cfg.FileStoragePath, s.cfg.Restore)
-		s.store = nStore
-		log.Info().Msg("Initialized memstorage")
-	}
-	return nil
-}
-
-func (s *Server) setEngine() {
-	gin.SetMode(gin.ReleaseMode)
-	engine := gin.New()
-
-	engine.Use(middleware.LoggerMiddleware(), gin.Recovery())
-	engine.Use(middleware.GzipMiddleware())
-	if s.cfg.HashKey != "" {
-		engine.Use(middleware.HashSumMiddleware(s.cfg.HashKey))
-		log.Info().Msg("Server using hash")
+		serviceRepository = memstorage.NewClient(cfg.StoreInterval, cfg.FileStoragePath, cfg.Restore)
 	}
 
-	engine.POST("/update/", handlers.PostMetricHandlerJSON(s.store))
-	engine.POST("/updates/", handlers.PostMultipleMetricsHandler(s.store))
-	engine.POST("/update/:mType/:mName/:mValue", handlers.PostMetricHandler(s.store))
-
-	engine.POST("/value/", handlers.GetMetricHandlerJSON(s.store))
-	engine.GET("/value/:mType/:mName", handlers.GetMetricHandler(s.store))
-
-	engine.GET("/ping", handlers.PingHandler(s.store))
-
-	engine.GET("/", handlers.ShowMetrics(s.store))
-
-	s.Engine = engine
-}
-
-func (s *Server) Run() error {
-	if err := s.Engine.Run(s.cfg.Address); err != nil {
-		return err
+	appService := &services.Service{
+		ServiceRepo: serviceRepository,
 	}
-	return nil
+
+	router := gin.Default()
+	pprof.Register(router)
+	controllers.NewHandler(router, appService, cfg.HashKey)
+
+	if err = router.Run(cfg.Address); err != nil {
+		log.Fatal().Err(err).Msg("error while running server")
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
 	"math/rand/v2"
 	"os"
 	"os/signal"
@@ -18,7 +19,6 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	"github.com/melkomukovki/go-musthave-metrics/internal/agent/config"
-	"github.com/melkomukovki/go-musthave-metrics/internal/storage"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
 )
@@ -26,7 +26,7 @@ import (
 type Agent struct {
 	mu          sync.Mutex
 	pollCounter int64
-	metrics     []storage.Metrics
+	metrics     []entities.Metrics
 	config      *config.ClientConfig
 	workerPool  chan func()
 }
@@ -53,12 +53,12 @@ func (a *Agent) resetPollCounter() {
 	a.pollCounter = 0
 }
 
-func createGaugeMetric(id string, value float64, mType string) storage.Metrics {
-	return storage.Metrics{ID: id, MType: mType, Value: &value}
+func createGaugeMetric(id string, value float64, mType string) entities.Metrics {
+	return entities.Metrics{ID: id, MType: mType, Value: &value}
 }
 
-func (a *Agent) pollAdditionalMetrics() []storage.Metrics {
-	var sMetrics []storage.Metrics
+func (a *Agent) pollAdditionalMetrics() []entities.Metrics {
+	var sMetrics []entities.Metrics
 
 	v, err := mem.VirtualMemory()
 	if err != nil {
@@ -74,7 +74,7 @@ func (a *Agent) pollAdditionalMetrics() []storage.Metrics {
 	}
 
 	for _, m := range metricsData {
-		sMetrics = append(sMetrics, createGaugeMetric(m.id, m.value, storage.Gauge))
+		sMetrics = append(sMetrics, createGaugeMetric(m.id, m.value, entities.Gauge))
 	}
 
 	cpuPercentages, err := cpu.Percent(0, true)
@@ -84,7 +84,7 @@ func (a *Agent) pollAdditionalMetrics() []storage.Metrics {
 
 	for i, m := range cpuPercentages {
 		id := fmt.Sprintf("CPUutilization%d", i+1)
-		sMetrics = append(sMetrics, createGaugeMetric(id, m, storage.Gauge))
+		sMetrics = append(sMetrics, createGaugeMetric(id, m, entities.Gauge))
 	}
 
 	return sMetrics
@@ -130,12 +130,12 @@ func (a *Agent) pollMetrics() {
 		{"RandomValue", rand.Float64()},
 	}
 
-	var newAr []storage.Metrics
+	var newAr []entities.Metrics
 	for _, m := range metricsData {
-		newAr = append(newAr, createGaugeMetric(m.id, m.value, storage.Gauge))
+		newAr = append(newAr, createGaugeMetric(m.id, m.value, entities.Gauge))
 	}
 
-	newAr = append(newAr, storage.Metrics{ID: "PollCount", MType: storage.Counter, Delta: &a.pollCounter})
+	newAr = append(newAr, entities.Metrics{ID: "PollCount", MType: entities.Counter, Delta: &a.pollCounter})
 
 	newAr = append(newAr, a.pollAdditionalMetrics()...)
 

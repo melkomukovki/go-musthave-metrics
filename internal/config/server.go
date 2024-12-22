@@ -12,7 +12,7 @@ import (
 const (
 	DefaultAddress         = "localhost:8080"
 	DefaultStoreInterval   = 300
-	DefaultFileStoragePath = "storefile.json"
+	DefaultFileStoragePath = "metrics.json"
 	DefaultRestore         = true
 	DefaultDSN             = ""
 	DefaultHashKey         = ""
@@ -78,7 +78,7 @@ func GetServerConfig() (ServerConfig, error) {
 				if err != nil {
 					return ServerConfig{}, err
 				}
-				f.Close()
+				_ = f.Close()
 			} else {
 				return ServerConfig{}, nil
 			}
