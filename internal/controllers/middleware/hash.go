@@ -30,6 +30,7 @@ func (w *bodyWriter) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
+// HashSumMiddleware adds support to validate hash for incoming requests and add hash header for response
 func HashSumMiddleware(hashKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Method == http.MethodPost && c.GetHeader("HashSHA256") != "" {
@@ -43,7 +44,7 @@ func HashSumMiddleware(hashKey string) gin.HandlerFunc {
 				return
 			}
 
-			if !validateRecivedHash(rawBody, c.GetHeader("HashSHA256"), hashKey) {
+			if !validateReceivedHash(rawBody, c.GetHeader("HashSHA256"), hashKey) {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"message": "invalid hash value",
 				})
@@ -65,7 +66,7 @@ func HashSumMiddleware(hashKey string) gin.HandlerFunc {
 	}
 }
 
-func validateRecivedHash(data []byte, hash, hashKey string) bool {
+func validateReceivedHash(data []byte, hash, hashKey string) bool {
 	h := hmac.New(sha256.New, []byte(hashKey))
 	h.Write(data)
 	return hex.EncodeToString(h.Sum(nil)) == hash

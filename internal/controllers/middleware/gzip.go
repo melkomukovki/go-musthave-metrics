@@ -1,7 +1,9 @@
+// Package middleware provides functions used when processing requests
 package middleware
 
 import (
 	"compress/gzip"
+	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 	"strings"
@@ -24,6 +26,7 @@ func (c *compressWriter) WriteHeader(statusCode int) {
 	c.ResponseWriter.WriteHeader(statusCode)
 }
 
+// GzipMiddleware adds support compression for request and response
 func GzipMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if strings.Contains(c.GetHeader("Content-Encoding"), "gzip") {
@@ -34,13 +37,21 @@ func GzipMiddleware() gin.HandlerFunc {
 				})
 				return
 			}
-			defer gzipReader.Close()
+			defer func() {
+				if err := gzipReader.Close(); err != nil {
+					log.Error().Err(err).Msg("failed to close gzip reader")
+				}
+			}()
 			c.Request.Body = io.NopCloser(gzipReader)
 		}
 
 		if strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
 			gzipWriter := gzip.NewWriter(c.Writer)
-			defer gzipWriter.Close()
+			defer func() {
+				if err := gzipWriter.Close(); err != nil {
+					log.Error().Err(err).Msg("failed to close gzip writer")
+				}
+			}()
 			c.Writer = &compressWriter{ResponseWriter: c.Writer, zw: gzipWriter}
 		}
 		c.Next()

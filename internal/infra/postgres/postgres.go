@@ -1,8 +1,11 @@
+// Package postgres implements StorageService
+// Using PostgreSQL to store metrics
 package postgres
 
 import (
 	"context"
 	"errors"
+	"github.com/rs/zerolog/log"
 	"time"
 
 	"github.com/jackc/pgerrcode"
@@ -26,6 +29,7 @@ const (
 	sqlGetAllMetricsQuery = `SELECT name, type, value FROM metric_storage`
 )
 
+// NewClient creates postgresql pool connection
 func NewClient(connectionDSN string) (*pgxpool.Pool, error) {
 	conn, err := pgxpool.New(context.Background(), connectionDSN)
 	if err != nil {
@@ -39,12 +43,14 @@ func NewClient(connectionDSN string) (*pgxpool.Pool, error) {
 	return conn, nil
 }
 
+// PgRepository describes repository structure
 type PgRepository struct {
 	DB *pgxpool.Pool
 }
 
-func (s *PgRepository) AddMetric(ctx context.Context, metric entities.MetricsSQL) (err error) {
-	nCtx, cancel := context.WithTimeout(ctx, time.Duration(2*time.Second))
+// AddMetric allow to add metric to postgresql storage
+func (s *PgRepository) AddMetric(ctx context.Context, metric entities.MetricInternal) (err error) {
+	nCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	err = s.retryOperation(func() error {
@@ -54,8 +60,9 @@ func (s *PgRepository) AddMetric(ctx context.Context, metric entities.MetricsSQL
 	return err
 }
 
-func (s *PgRepository) AddMultipleMetrics(ctx context.Context, metrics []entities.MetricsSQL) (err error) {
-	nCtx, cancel := context.WithTimeout(ctx, time.Duration(3*time.Second))
+// AddMultipleMetrics allow to add multiple metrics to postgresql storage
+func (s *PgRepository) AddMultipleMetrics(ctx context.Context, metrics []entities.MetricInternal) (err error) {
+	nCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	err = s.retryOperation(func() error {
@@ -63,7 +70,11 @@ func (s *PgRepository) AddMultipleMetrics(ctx context.Context, metrics []entitie
 		if err != nil {
 			return err
 		}
-		defer tx.Rollback(nCtx)
+		defer func() {
+			if err := tx.Rollback(nCtx); err != nil {
+				log.Error().Err(err).Msg("Failed rollback transaction")
+			}
+		}()
 
 		for _, metric := range metrics {
 			_, err = tx.Exec(nCtx, sqlAddMetricQuery, metric.ID, metric.MType, metric.Value)
@@ -79,11 +90,12 @@ func (s *PgRepository) AddMultipleMetrics(ctx context.Context, metrics []entitie
 	return err
 }
 
-func (s *PgRepository) GetMetric(ctx context.Context, mType, mName string) (metric entities.MetricsSQL, err error) {
-	nCtx, cancel := context.WithTimeout(ctx, time.Duration(2*time.Second))
+// GetMetric allow to get metrics from storage
+func (s *PgRepository) GetMetric(ctx context.Context, mType, mName string) (metric entities.MetricInternal, err error) {
+	nCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	var m entities.MetricsSQL
+	var m entities.MetricInternal
 	row := s.DB.QueryRow(nCtx, sqlGetMetricQuery, mName, mType)
 
 	err = s.retryOperation(func() error {
@@ -92,14 +104,15 @@ func (s *PgRepository) GetMetric(ctx context.Context, mType, mName string) (metr
 	})
 
 	if err != nil {
-		return entities.MetricsSQL{}, err
+		return entities.MetricInternal{}, err
 	}
 
 	return m, nil
 }
 
-func (s *PgRepository) GetAllMetrics(ctx context.Context) (metrics []entities.MetricsSQL, err error) {
-	nCtx, cancel := context.WithTimeout(ctx, time.Duration(3*time.Second))
+// GetAllMetrics allow to get all metrics from postgresql
+func (s *PgRepository) GetAllMetrics(ctx context.Context) (metrics []entities.MetricInternal, err error) {
+	nCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	var rows pgx.Rows
@@ -109,23 +122,24 @@ func (s *PgRepository) GetAllMetrics(ctx context.Context) (metrics []entities.Me
 		return err
 	})
 	if err != nil {
-		return []entities.MetricsSQL{}, err
+		return []entities.MetricInternal{}, err
 	}
 
 	for rows.Next() {
-		var mSQL entities.MetricsSQL
+		var mSQL entities.MetricInternal
 
 		err := rows.Scan(&mSQL.ID, &mSQL.MType, &mSQL.Value)
 		if err != nil {
-			return []entities.MetricsSQL{}, err
+			return []entities.MetricInternal{}, err
 		}
 		metrics = append(metrics, mSQL)
 	}
 	return metrics, nil
 }
 
+// Ping - check connection to database
 func (s *PgRepository) Ping(ctx context.Context) (err error) {
-	nCtx, cancel := context.WithTimeout(ctx, time.Duration(time.Second))
+	nCtx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	return s.DB.Ping(nCtx)
 }
@@ -153,7 +167,11 @@ func migrate(db *pgxpool.Pool) (err error) {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed rollback transaction")
+		}
+	}()
 
 	_, err = tx.Exec(ctx, sqlCreateTableQuery)
 	if err != nil {

@@ -1,3 +1,4 @@
+// Package config define client config structure
 package config
 
 import (
@@ -7,6 +8,7 @@ import (
 	"strconv"
 )
 
+// Default client config params
 const (
 	DefaultAddress        = "localhost:8080"
 	DefaultPollInterval   = 2
@@ -15,14 +17,16 @@ const (
 	DefaultRateLimit      = 10
 )
 
+// ClientConfig structure define
 type ClientConfig struct {
-	Address        string `env:"ADDRESS"`
-	ReportInterval int    `env:"REPORT_INTERVAL"`
-	PollInterval   int    `env:"POLL_INTERVAL"`
-	HashKey        string `env:"KEY"`
-	RateLimit      int    `env:"RATE_LIMIT"`
+	Address        string `env:"ADDRESS"`         // Server address with port
+	ReportInterval int    `env:"REPORT_INTERVAL"` // Metrics poll interval in seconds
+	PollInterval   int    `env:"POLL_INTERVAL"`   // Metrics report interval in seconds
+	HashKey        string `env:"KEY"`             // Secret key using for hashing
+	RateLimit      int    `env:"RATE_LIMIT"`      // Maximum concurrent connections to server
 }
 
+// GetClientConfig allow to get ClientConfig
 func GetClientConfig() (ClientConfig, error) {
 	var cfg ClientConfig
 

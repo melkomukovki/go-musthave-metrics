@@ -21,8 +21,8 @@ func main() {
 
 	client := resty.New()
 	client.SetRetryCount(3).
-		SetRetryWaitTime(time.Duration(time.Second)).
-		SetRetryMaxWaitTime(time.Duration(5 * time.Second)).
+		SetRetryWaitTime(time.Second).
+		SetRetryMaxWaitTime(5 * time.Second).
 		SetRetryAfter(func(client *resty.Client, resp *resty.Response) (time.Duration, error) {
 			return 0, errors.New("quota exceeded")
 		})

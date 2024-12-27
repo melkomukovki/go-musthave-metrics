@@ -1,3 +1,4 @@
+// Package server реализует логику связывания необходимых компонентов для работы сервера
 package server
 
 import (
@@ -12,6 +13,7 @@ import (
 	"github.com/melkomukovki/go-musthave-metrics/internal/services"
 )
 
+// Run - подготовка необходимых компонентов и запуск сервера
 func Run() {
 	cfg, err := config.GetServerConfig()
 	if err != nil {

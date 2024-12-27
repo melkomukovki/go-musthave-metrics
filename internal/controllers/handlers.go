@@ -1,3 +1,4 @@
+// Package controllers describe handlers used in project
 package controllers
 
 import (
@@ -14,10 +15,12 @@ import (
 	"github.com/melkomukovki/go-musthave-metrics/internal/services"
 )
 
+// AppHandler define handler structure
 type AppHandler struct {
 	Service *services.Service
 }
 
+// NewHandler adds needed routers and middleware to our gin engine
 func NewHandler(router *gin.Engine, service *services.Service, hashKey string) {
 	handler := AppHandler{Service: service}
 
@@ -42,7 +45,7 @@ func NewHandler(router *gin.Engine, service *services.Service, hashKey string) {
 }
 
 func (a *AppHandler) postMetricJSON(c *gin.Context) {
-	var v entities.Metrics
+	var v entities.Metric
 	if err := c.BindJSON(&v); err != nil {
 		c.AbortWithStatusJSON(
 			http.StatusBadRequest,
@@ -73,7 +76,7 @@ func (a *AppHandler) postMetricJSON(c *gin.Context) {
 }
 
 func (a *AppHandler) postMultipleMetrics(c *gin.Context) {
-	var metrics []entities.Metrics
+	var metrics []entities.Metric
 	if err := c.BindJSON(&metrics); err != nil {
 		errMsg := fmt.Sprintf("Invalid payload. Error: %s", err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -105,7 +108,7 @@ func (a *AppHandler) postMetric(c *gin.Context) {
 		if err != nil {
 			c.String(http.StatusBadRequest, "Can't convert value %s to float64", mValue)
 		}
-		metric := entities.Metrics{ID: mName, MType: mType, Value: &value}
+		metric := entities.Metric{ID: mName, MType: mType, Value: &value}
 		err = a.Service.AddMetric(c, metric)
 		if err != nil {
 			c.String(http.StatusBadRequest, "Can't add gauge metric: %s - %s. Error: %s", mName, mValue, err.Error())
@@ -116,7 +119,7 @@ func (a *AppHandler) postMetric(c *gin.Context) {
 		if err != nil {
 			c.String(http.StatusBadRequest, "Can't convert value %s to int64", mValue)
 		}
-		metric := entities.Metrics{ID: mName, MType: mType, Delta: &value}
+		metric := entities.Metric{ID: mName, MType: mType, Delta: &value}
 		err = a.Service.AddMetric(c, metric)
 		if err != nil {
 			c.String(http.StatusBadRequest, "Can't add counter metric: %s - %s. Error: %s", mName, mValue, err.Error())
@@ -131,10 +134,10 @@ func (a *AppHandler) postMetric(c *gin.Context) {
 }
 
 func (a *AppHandler) getMetricJSON(c *gin.Context) {
-	var v entities.Metrics
+	var v entities.Metric
 	if err := c.BindJSON(&v); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "Invaild payload " + err.Error(),
+			"message": "Invalid payload " + err.Error(),
 		})
 		return
 	}
@@ -190,11 +193,12 @@ func (a *AppHandler) ping(c *gin.Context) {
 }
 
 func (a *AppHandler) showMetrics(c *gin.Context) {
-	var result string
 	metrics, err := a.Service.GetAllMetrics(c)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Internal Server Error")
 	}
+
+	var result string
 	for _, v := range metrics {
 		switch v.MType {
 		case entities.Gauge:

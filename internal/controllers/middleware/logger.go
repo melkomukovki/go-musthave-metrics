@@ -19,6 +19,7 @@ func (w bodyLogWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
+// LoggerMiddleware add custom log format for gin engine
 func LoggerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -50,7 +51,7 @@ func LoggerMiddleware() gin.HandlerFunc {
 			Str("hashIn", hashInHeader).
 			Str("hashOut", hashOutHeader).
 			Str("responseBody", respBody).
-			Msg("request recived")
+			Msg("request received")
 	}
 
 }

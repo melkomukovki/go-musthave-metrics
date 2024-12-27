@@ -1,3 +1,5 @@
+// Package memstorage implement ServiceStorage interface
+// Use memory and filesystem to store metrics
 package memstorage
 
 import (
@@ -13,6 +15,7 @@ import (
 	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
 )
 
+// NewClient return pointer to MemStorage structure
 func NewClient(storeInterval int, storePath string, restore bool) *MemStorage {
 	var syncMode = false
 	if storeInterval == 0 {
@@ -43,6 +46,7 @@ func NewClient(storeInterval int, storePath string, restore bool) *MemStorage {
 	return newStorage
 }
 
+// MemStorage define storage structure
 type MemStorage struct {
 	GaugeMetrics   sync.Map
 	CounterMetrics sync.Map
@@ -52,7 +56,7 @@ type MemStorage struct {
 }
 
 func (m *MemStorage) restoreStorage() error {
-	metrics := []entities.MetricsSQL{}
+	var metrics []entities.MetricInternal
 	data, err := os.ReadFile(m.storePath)
 	if err != nil {
 		return err
@@ -70,6 +74,7 @@ func (m *MemStorage) restoreStorage() error {
 	return nil
 }
 
+// BackupMetrics function to store metrics to filesystem
 func (m *MemStorage) BackupMetrics() error {
 	allMetrics, _ := m.GetAllMetrics(context.TODO())
 	mJSON, err := json.Marshal(allMetrics)
@@ -79,13 +84,14 @@ func (m *MemStorage) BackupMetrics() error {
 	return os.WriteFile(m.storePath, mJSON, 0666)
 }
 
-func (m *MemStorage) AddMetric(ctx context.Context, metric entities.MetricsSQL) error {
+// AddMetric allow to add metric to storage
+func (m *MemStorage) AddMetric(ctx context.Context, metric entities.MetricInternal) error {
 	switch metric.MType {
 	case entities.Gauge:
 		if metric.Value == "" {
 			return entities.ErrMissingField
 		}
-		tm := entities.MetricsSQL{
+		tm := entities.MetricInternal{
 			ID:    metric.ID,
 			MType: metric.MType,
 			Value: metric.Value,
@@ -95,7 +101,7 @@ func (m *MemStorage) AddMetric(ctx context.Context, metric entities.MetricsSQL) 
 		if metric.Value == "" {
 			return entities.ErrMissingField
 		}
-		tm := entities.MetricsSQL{
+		tm := entities.MetricInternal{
 			ID:    metric.ID,
 			MType: metric.MType,
 			Value: metric.Value,
@@ -117,11 +123,11 @@ func (m *MemStorage) AddMetric(ctx context.Context, metric entities.MetricsSQL) 
 	return nil
 }
 
-func (m *MemStorage) addGaugeMetric(metric entities.MetricsSQL) {
+func (m *MemStorage) addGaugeMetric(metric entities.MetricInternal) {
 	m.GaugeMetrics.Store(metric.ID, metric.Value)
 }
 
-func (m *MemStorage) addCounterMetric(metric entities.MetricsSQL) (err error) {
+func (m *MemStorage) addCounterMetric(metric entities.MetricInternal) (err error) {
 	if val, ok := m.CounterMetrics.Load(metric.ID); ok {
 		v, _ := val.(int64)
 		mVal, err := strconv.ParseInt(metric.Value, 10, 64)
@@ -136,30 +142,32 @@ func (m *MemStorage) addCounterMetric(metric entities.MetricsSQL) (err error) {
 	return nil
 }
 
-func (m *MemStorage) GetMetric(ctx context.Context, mType, mName string) (entities.MetricsSQL, error) {
+// GetMetric allow to get metric from storage
+func (m *MemStorage) GetMetric(ctx context.Context, mType, mName string) (entities.MetricInternal, error) {
 	switch mType {
 	case entities.Gauge:
 		if val, ok := m.GaugeMetrics.Load(mName); ok {
-			return entities.MetricsSQL{ID: mName, MType: mType, Value: val.(string)}, nil
+			return entities.MetricInternal{ID: mName, MType: mType, Value: val.(string)}, nil
 		} else {
-			return entities.MetricsSQL{}, entities.ErrMetricNotFound
+			return entities.MetricInternal{}, entities.ErrMetricNotFound
 		}
 	case entities.Counter:
 		if val, ok := m.CounterMetrics.Load(mName); ok {
-			return entities.MetricsSQL{ID: mName, MType: mType, Value: val.(string)}, nil
+			return entities.MetricInternal{ID: mName, MType: mType, Value: val.(string)}, nil
 		} else {
-			return entities.MetricsSQL{}, entities.ErrMetricNotFound
+			return entities.MetricInternal{}, entities.ErrMetricNotFound
 		}
 	default:
-		return entities.MetricsSQL{}, entities.ErrMetricNotSupportedType
+		return entities.MetricInternal{}, entities.ErrMetricNotSupportedType
 	}
 }
 
-func (m *MemStorage) GetAllMetrics(ctx context.Context) ([]entities.MetricsSQL, error) {
-	var res []entities.MetricsSQL
+// GetAllMetrics allow to get all metrics from memory storage
+func (m *MemStorage) GetAllMetrics(ctx context.Context) ([]entities.MetricInternal, error) {
+	var res []entities.MetricInternal
 
 	m.CounterMetrics.Range(func(key, value interface{}) bool {
-		tm := entities.MetricsSQL{
+		tm := entities.MetricInternal{
 			ID:    key.(string),
 			MType: entities.Counter,
 			Value: value.(string),
@@ -170,7 +178,7 @@ func (m *MemStorage) GetAllMetrics(ctx context.Context) ([]entities.MetricsSQL, 
 	})
 
 	m.GaugeMetrics.Range(func(key, value interface{}) bool {
-		tm := entities.MetricsSQL{
+		tm := entities.MetricInternal{
 			ID:    key.(string),
 			MType: entities.Gauge,
 			Value: value.(string),
@@ -183,11 +191,13 @@ func (m *MemStorage) GetAllMetrics(ctx context.Context) ([]entities.MetricsSQL, 
 	return res, nil
 }
 
+// Ping check accessibility. Always return nil error
 func (m *MemStorage) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (m *MemStorage) AddMultipleMetrics(ctx context.Context, metrics []entities.MetricsSQL) (err error) {
+// AddMultipleMetrics allow to add multiple metrics at once
+func (m *MemStorage) AddMultipleMetrics(ctx context.Context, metrics []entities.MetricInternal) (err error) {
 	for _, metric := range metrics {
 		switch metric.MType {
 		case entities.Counter:

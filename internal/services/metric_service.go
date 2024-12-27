@@ -9,7 +9,8 @@ import (
 	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
 )
 
-func (s *Service) AddMetric(ctx context.Context, metric entities.Metrics) (err error) {
+// AddMetric allow to add metric
+func (s *Service) AddMetric(ctx context.Context, metric entities.Metric) (err error) {
 	var mName string
 	var mType string
 	var mValue string
@@ -36,7 +37,7 @@ func (s *Service) AddMetric(ctx context.Context, metric entities.Metrics) (err e
 	} else {
 		return entities.ErrMetricNotSupportedType
 	}
-	mSQL := entities.MetricsSQL{
+	mSQL := entities.MetricInternal{
 		ID:    mName,
 		MType: mType,
 		Value: mValue,
@@ -44,11 +45,13 @@ func (s *Service) AddMetric(ctx context.Context, metric entities.Metrics) (err e
 	return s.ServiceRepo.AddMetric(ctx, mSQL)
 }
 
+// Ping - function to check storage availability
 func (s *Service) Ping(ctx context.Context) (err error) {
 	return s.ServiceRepo.Ping(ctx)
 }
 
-func (s *Service) GetAllMetrics(ctx context.Context) (metrics []entities.Metrics, err error) {
+// GetAllMetrics allow to get all metrics
+func (s *Service) GetAllMetrics(ctx context.Context) (metrics []entities.Metric, err error) {
 	mSQL, err := s.ServiceRepo.GetAllMetrics(ctx)
 	if err != nil {
 		return nil, err
@@ -60,30 +63,31 @@ func (s *Service) GetAllMetrics(ctx context.Context) (metrics []entities.Metrics
 			if err != nil {
 				return nil, err
 			}
-			metrics = append(metrics, entities.Metrics{ID: m.ID, MType: m.MType, Delta: &val})
+			metrics = append(metrics, entities.Metric{ID: m.ID, MType: m.MType, Delta: &val})
 		} else if m.MType == entities.Gauge {
 			val, err := strconv.ParseFloat(m.Value, 64)
 			if err != nil {
 				return nil, err
 			}
-			metrics = append(metrics, entities.Metrics{ID: m.ID, MType: m.MType, Value: &val})
+			metrics = append(metrics, entities.Metric{ID: m.ID, MType: m.MType, Value: &val})
 		}
 	}
 
 	return metrics, nil
 }
 
-func (s *Service) GetMetric(ctx context.Context, mType, mName string) (metric entities.Metrics, err error) {
+// GetMetric allow to get metric
+func (s *Service) GetMetric(ctx context.Context, mType, mName string) (metric entities.Metric, err error) {
 	m, err := s.ServiceRepo.GetMetric(ctx, mType, mName)
 	if err != nil {
-		return entities.Metrics{}, err
+		return entities.Metric{}, err
 	}
 
 	switch m.MType {
 	case entities.Gauge:
 		val, err := strconv.ParseFloat(m.Value, 64)
 		if err != nil {
-			return entities.Metrics{}, err
+			return entities.Metric{}, err
 		}
 		metric.ID = m.ID
 		metric.MType = m.MType
@@ -91,7 +95,7 @@ func (s *Service) GetMetric(ctx context.Context, mType, mName string) (metric en
 	case entities.Counter:
 		val, err := strconv.ParseInt(m.Value, 10, 64)
 		if err != nil {
-			return entities.Metrics{}, err
+			return entities.Metric{}, err
 		}
 		metric.ID = m.ID
 		metric.MType = m.MType
@@ -100,8 +104,9 @@ func (s *Service) GetMetric(ctx context.Context, mType, mName string) (metric en
 	return metric, nil
 }
 
-func (s *Service) AddMultipleMetrics(ctx context.Context, metrics []entities.Metrics) (err error) {
-	var mSQL []entities.MetricsSQL
+// AddMultipleMetrics allow to add multiple metrics
+func (s *Service) AddMultipleMetrics(ctx context.Context, metrics []entities.Metric) (err error) {
+	var mSQL []entities.MetricInternal
 	counterMetrics := make(map[string]int64)
 
 	for _, m := range metrics {
@@ -110,7 +115,7 @@ func (s *Service) AddMultipleMetrics(ctx context.Context, metrics []entities.Met
 			if m.Value == nil {
 				return entities.ErrMissingField
 			}
-			mSQL = append(mSQL, entities.MetricsSQL{ID: m.ID, MType: m.MType, Value: fmt.Sprintf("%g", *m.Value)})
+			mSQL = append(mSQL, entities.MetricInternal{ID: m.ID, MType: m.MType, Value: fmt.Sprintf("%g", *m.Value)})
 		case entities.Counter:
 			if m.Delta == nil {
 				return entities.ErrMissingField
@@ -132,7 +137,7 @@ func (s *Service) AddMultipleMetrics(ctx context.Context, metrics []entities.Met
 
 			mSQL = append(
 				mSQL,
-				entities.MetricsSQL{ID: metricID, MType: m.MType, Value: strconv.Itoa(int(aggregatedValue))},
+				entities.MetricInternal{ID: metricID, MType: m.MType, Value: strconv.Itoa(int(aggregatedValue))},
 			)
 		}
 	}
