@@ -1,3 +1,4 @@
+// Package agent определяет структуру и функции агента по отправке метрик
 package agent
 
 import (
@@ -8,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"math/rand/v2"
 	"os"
 	"os/signal"
@@ -16,21 +18,25 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
+
 	"github.com/go-resty/resty/v2"
-	"github.com/melkomukovki/go-musthave-metrics/internal/agent/config"
-	"github.com/melkomukovki/go-musthave-metrics/internal/storage"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
+
+	"github.com/melkomukovki/go-musthave-metrics/internal/agent/config"
 )
 
+// Agent описывает структуру агента по сбору и отправке метрик
 type Agent struct {
 	mu          sync.Mutex
 	pollCounter int64
-	metrics     []storage.Metrics
+	metrics     []entities.Metric
 	config      *config.ClientConfig
 	workerPool  chan func()
 }
 
+// NewAgent функция для получения экземпляра агента
 func NewAgent(cfg *config.ClientConfig) *Agent {
 	agent := &Agent{
 		config:     cfg,
@@ -53,16 +59,17 @@ func (a *Agent) resetPollCounter() {
 	a.pollCounter = 0
 }
 
-func createGaugeMetric(id string, value float64, mType string) storage.Metrics {
-	return storage.Metrics{ID: id, MType: mType, Value: &value}
+func createGaugeMetric(id string, value float64, mType string) entities.Metric {
+	return entities.Metric{ID: id, MType: mType, Value: &value}
 }
 
-func (a *Agent) pollAdditionalMetrics() []storage.Metrics {
-	var sMetrics []storage.Metrics
+func (a *Agent) pollAdditionalMetrics() []entities.Metric {
+	var sMetrics []entities.Metric
 
 	v, err := mem.VirtualMemory()
 	if err != nil {
-		fmt.Printf("Error collecting memory metrics: %s\n", err.Error())
+		log.Error().Err(err).Msg("Error getting memory metrics")
+		return sMetrics
 	}
 
 	metricsData := []struct {
@@ -74,7 +81,7 @@ func (a *Agent) pollAdditionalMetrics() []storage.Metrics {
 	}
 
 	for _, m := range metricsData {
-		sMetrics = append(sMetrics, createGaugeMetric(m.id, m.value, storage.Gauge))
+		sMetrics = append(sMetrics, createGaugeMetric(m.id, m.value, entities.Gauge))
 	}
 
 	cpuPercentages, err := cpu.Percent(0, true)
@@ -84,7 +91,7 @@ func (a *Agent) pollAdditionalMetrics() []storage.Metrics {
 
 	for i, m := range cpuPercentages {
 		id := fmt.Sprintf("CPUutilization%d", i+1)
-		sMetrics = append(sMetrics, createGaugeMetric(id, m, storage.Gauge))
+		sMetrics = append(sMetrics, createGaugeMetric(id, m, entities.Gauge))
 	}
 
 	return sMetrics
@@ -103,7 +110,7 @@ func (a *Agent) pollMetrics() {
 		{"Alloc", float64(rtm.Alloc)},
 		{"BuckHashSys", float64(rtm.BuckHashSys)},
 		{"Frees", float64(rtm.Frees)},
-		{"GCCPUFraction", float64(rtm.GCCPUFraction)},
+		{"GCCPUFraction", rtm.GCCPUFraction},
 		{"GCSys", float64(rtm.GCSys)},
 		{"HeapAlloc", float64(rtm.HeapAlloc)},
 		{"HeapIdle", float64(rtm.HeapIdle)},
@@ -130,12 +137,12 @@ func (a *Agent) pollMetrics() {
 		{"RandomValue", rand.Float64()},
 	}
 
-	var newAr []storage.Metrics
+	var newAr []entities.Metric
 	for _, m := range metricsData {
-		newAr = append(newAr, createGaugeMetric(m.id, m.value, storage.Gauge))
+		newAr = append(newAr, createGaugeMetric(m.id, m.value, entities.Gauge))
 	}
 
-	newAr = append(newAr, storage.Metrics{ID: "PollCount", MType: storage.Counter, Delta: &a.pollCounter})
+	newAr = append(newAr, entities.Metric{ID: "PollCount", MType: entities.Counter, Delta: &a.pollCounter})
 
 	newAr = append(newAr, a.pollAdditionalMetrics()...)
 
@@ -190,12 +197,13 @@ func (a *Agent) reportMetrics(c *resty.Client) {
 			fmt.Printf("Error sending metrics. Detected error: %s\n", err.Error())
 			return
 		}
-		fmt.Printf("Metrics was sended. Status code: %d\n", resp.StatusCode())
+		fmt.Printf("Metric was sended. Status code: %d\n", resp.StatusCode())
 		fmt.Println(resp.Header())
 		a.resetPollCounter()
 	}
 }
 
+// Run - функция для запуска работы агента
 func (a *Agent) Run(cResty *resty.Client) {
 	pollTicker := time.NewTicker(time.Duration(a.config.PollInterval) * time.Second)
 	defer pollTicker.Stop()

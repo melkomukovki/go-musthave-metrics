@@ -1,3 +1,4 @@
+// Package config define server config structure
 package config
 
 import (
@@ -9,15 +10,17 @@ import (
 	"strings"
 )
 
+// Default server config settings
 const (
-	DefaultAddress         = "localhost:8080"
-	DefaultStoreInterval   = 300
-	DefaultFileStoragePath = "storefile.json"
-	DefaultRestore         = true
-	DefaultDSN             = ""
-	DefaultHashKey         = ""
+	DefaultAddress         = "localhost:8080" // Server address
+	DefaultStoreInterval   = 300              // Store interval in seconds
+	DefaultFileStoragePath = "metrics.json"   // Path to storage file
+	DefaultRestore         = true             // Restore metrics from file
+	DefaultDSN             = ""               // DSN connection string
+	DefaultHashKey         = ""               // Secret string for hashing messages
 )
 
+// ServerConfig server config structure
 type ServerConfig struct {
 	Address         string `env:"ADDRESS"`
 	StoreInterval   int    `env:"STORE_INTERVAL"`
@@ -27,6 +30,7 @@ type ServerConfig struct {
 	HashKey         string `env:"KEY"`
 }
 
+// GetServerConfig allows to get instance of ServerConfig
 func GetServerConfig() (ServerConfig, error) {
 	var cfg ServerConfig
 
@@ -78,7 +82,7 @@ func GetServerConfig() (ServerConfig, error) {
 				if err != nil {
 					return ServerConfig{}, err
 				}
-				f.Close()
+				_ = f.Close()
 			} else {
 				return ServerConfig{}, nil
 			}
