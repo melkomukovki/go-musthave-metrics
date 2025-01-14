@@ -96,7 +96,6 @@ func (a *AppHandler) postMultipleMetrics(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "success"})
 }
 
-// TODO
 func (a *AppHandler) postMetric(c *gin.Context) {
 	mType := c.Params.ByName("mType")
 	mName := c.Params.ByName("mName")

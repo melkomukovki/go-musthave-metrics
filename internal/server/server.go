@@ -22,9 +22,9 @@ func Run() {
 
 	var serviceRepository services.ServiceRepository
 	if cfg.DataSourceName != "" {
-		store, err := postgres.NewClient(cfg.DataSourceName)
-		if err != nil {
-			log.Fatal().Err(err).Msg("can't initialize postgresql storage")
+		store, e := postgres.NewClient(cfg.DataSourceName)
+		if e != nil {
+			log.Fatal().Err(e).Msg("can't initialize postgresql storage")
 		}
 		serviceRepository = &postgres.PgRepository{DB: store}
 	} else {
