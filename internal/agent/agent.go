@@ -5,10 +5,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/hmac"
+	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/melkomukovki/go-musthave-metrics/internal/utils"
 	"github.com/rs/zerolog/log"
 	"math/rand/v2"
 	"os"
@@ -29,22 +31,34 @@ import (
 
 // Agent описывает структуру агента по сбору и отправке метрик
 type Agent struct {
-	mu          sync.Mutex
-	pollCounter int64
-	metrics     []entities.Metric
-	config      *config.ClientConfig
-	workerPool  chan func()
+	mu              sync.Mutex
+	pollCounter     int64
+	metrics         []entities.Metric
+	config          *config.ClientConfig
+	workerPool      chan func()
+	cryptoPublicKey *rsa.PublicKey
 }
 
 // NewAgent функция для получения экземпляра агента
-func NewAgent(cfg *config.ClientConfig) *Agent {
+func NewAgent(cfg *config.ClientConfig) (*Agent, error) {
+	// init base struct
 	agent := &Agent{
 		config:     cfg,
 		workerPool: make(chan func(), cfg.RateLimit),
 	}
+
+	// if cert path provided, get cert
+	if cfg.CryptoKey != "" {
+		publicKey, err := utils.GetPublicKey(cfg.CryptoKey)
+		if err != nil {
+			return nil, err
+		}
+		agent.cryptoPublicKey = publicKey
+	}
+
 	agent.createWorkerPool()
 
-	return agent
+	return agent, nil
 }
 
 func (a *Agent) addPollCounter() {
@@ -177,15 +191,28 @@ func (a *Agent) reportMetrics(c *resty.Client) {
 			"Accept-Encoding":  "gzip",
 		}
 
-		mMarshaled, _ := json.Marshal(a.metrics)
+		mMarshaled, err := json.Marshal(a.metrics)
+		if err != nil {
+			log.Error().Err(err).Msg("Error marshalling metrics")
+			return
+		}
 		if a.config.HashKey != "" {
 			hashString := a.getHash(mMarshaled)
 			headers["HashSHA256"] = hashString
 		}
 
+		// encrypt message if certificate presents
+		if a.config.CryptoKey != "" {
+			mMarshaled, err = utils.Encrypt(mMarshaled, a.cryptoPublicKey)
+			if err != nil {
+				log.Error().Err(err).Msg("Error encrypting metrics")
+				return
+			}
+		}
+
 		compressedData, err := gzipData(mMarshaled)
 		if err != nil {
-			fmt.Printf("Error sending metrics. Error: %s\n", err.Error())
+			log.Error().Err(err).Msg("Error compressing metrics")
 			return
 		}
 
@@ -194,10 +221,10 @@ func (a *Agent) reportMetrics(c *resty.Client) {
 			SetHeaders(headers).
 			Post(url)
 		if err != nil {
-			fmt.Printf("Error sending metrics. Detected error: %s\n", err.Error())
+			log.Error().Err(err).Msg("Error reporting metrics")
 			return
 		}
-		fmt.Printf("Metric was sended. Status code: %d\n", resp.StatusCode())
+		log.Info().Msg("Metric was sent")
 		fmt.Println(resp.Header())
 		a.resetPollCounter()
 	}
