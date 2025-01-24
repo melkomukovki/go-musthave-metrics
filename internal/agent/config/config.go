@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"os"
 	"strconv"
 )
@@ -120,7 +121,7 @@ func loadConfigFromFile(path string) (ClientConfig, error) {
 	defer func() {
 		err := file.Close()
 		if err != nil {
-			fmt.Printf("Error closing file: %v", err)
+			log.Error().Err(err).Msg("failed to close config file")
 		}
 	}()
 

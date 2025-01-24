@@ -4,6 +4,7 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/hmac"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -20,13 +21,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
-
 	"github.com/go-resty/resty/v2"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
 
 	"github.com/melkomukovki/go-musthave-metrics/internal/agent/config"
+	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
 )
 
 // Agent описывает структуру агента по сбору и отправке метрик
@@ -216,7 +216,7 @@ func (a *Agent) reportMetrics(c *resty.Client) {
 			return
 		}
 
-		resp, err := c.R().
+		_, err = c.R().
 			SetBody(compressedData).
 			SetHeaders(headers).
 			Post(url)
@@ -225,13 +225,15 @@ func (a *Agent) reportMetrics(c *resty.Client) {
 			return
 		}
 		log.Info().Msg("Metric was sent")
-		fmt.Println(resp.Header())
 		a.resetPollCounter()
 	}
 }
 
 // Run - функция для запуска работы агента
 func (a *Agent) Run(cResty *resty.Client) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	pollTicker := time.NewTicker(time.Duration(a.config.PollInterval) * time.Second)
 	defer pollTicker.Stop()
 
@@ -239,7 +241,13 @@ func (a *Agent) Run(cResty *resty.Client) {
 	defer reportTicker.Stop()
 
 	sigsEnd := make(chan os.Signal, 1)
-	signal.Notify(sigsEnd, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigsEnd, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	go func() {
+		<-sigsEnd
+		log.Info().Msg("Received signal, shutting down")
+		cancel()
+	}()
 
 	// First-time poll and send metrics
 	a.pollMetrics()
@@ -248,8 +256,11 @@ func (a *Agent) Run(cResty *resty.Client) {
 	// And loop with timers
 	for {
 		select {
-		case <-sigsEnd:
+		case <-ctx.Done():
 			close(a.workerPool)
+			for task := range a.workerPool {
+				task()
+			}
 			return
 		case <-pollTicker.C:
 			a.pollMetrics()
