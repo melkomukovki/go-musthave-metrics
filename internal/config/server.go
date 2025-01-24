@@ -155,9 +155,6 @@ func mergeConfig(cfg *ServerConfig, fileCfg ServerConfig) {
 	if cfg.FileStoragePath == DefaultFileStoragePath && fileCfg.FileStoragePath != "" {
 		cfg.FileStoragePath = fileCfg.FileStoragePath
 	}
-	if cfg.Restore == DefaultRestore && fileCfg.Restore != false {
-		cfg.Restore = fileCfg.Restore
-	}
 	if cfg.DataSourceName == DefaultDSN && fileCfg.DataSourceName != "" {
 		cfg.DataSourceName = fileCfg.DataSourceName
 	}
