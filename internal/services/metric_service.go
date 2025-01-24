@@ -16,7 +16,8 @@ func (s *Service) AddMetric(ctx context.Context, metric entities.Metric) (err er
 	var mValue string
 
 	mName = metric.ID
-	if metric.MType == entities.Counter {
+	switch metric.MType {
+	case entities.Counter:
 		if metric.Delta == nil {
 			return entities.ErrMissingField
 		}
@@ -27,16 +28,17 @@ func (s *Service) AddMetric(ctx context.Context, metric entities.Metric) (err er
 		} else {
 			mValue = strconv.Itoa(int(*metric.Delta + *pMetric.Delta))
 		}
-	} else if metric.MType == entities.Gauge {
+	case entities.Gauge:
 		if metric.Value == nil {
 			return entities.ErrMissingField
 		}
 
 		mType = entities.Gauge
 		mValue = fmt.Sprintf("%g", *metric.Value)
-	} else {
+	default:
 		return entities.ErrMetricNotSupportedType
 	}
+
 	mSQL := entities.MetricInternal{
 		ID:    mName,
 		MType: mType,
@@ -58,13 +60,14 @@ func (s *Service) GetAllMetrics(ctx context.Context) (metrics []entities.Metric,
 	}
 
 	for _, m := range mSQL {
-		if m.MType == entities.Counter {
+		switch m.MType {
+		case entities.Counter:
 			val, err := strconv.ParseInt(m.Value, 10, 64)
 			if err != nil {
 				return nil, err
 			}
 			metrics = append(metrics, entities.Metric{ID: m.ID, MType: m.MType, Delta: &val})
-		} else if m.MType == entities.Gauge {
+		case entities.Gauge:
 			val, err := strconv.ParseFloat(m.Value, 64)
 			if err != nil {
 				return nil, err

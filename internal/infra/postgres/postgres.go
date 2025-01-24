@@ -61,17 +61,17 @@ func (s *PgRepository) AddMetric(ctx context.Context, metric entities.MetricInte
 }
 
 // AddMultipleMetrics allow to add multiple metrics to postgresql storage
-func (s *PgRepository) AddMultipleMetrics(ctx context.Context, metrics []entities.MetricInternal) (err error) {
+func (s *PgRepository) AddMultipleMetrics(ctx context.Context, metrics []entities.MetricInternal) error {
 	nCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	err = s.retryOperation(func() error {
+	err := s.retryOperation(func() error {
 		tx, err := s.DB.Begin(nCtx)
 		if err != nil {
 			return err
 		}
 		defer func() {
-			if err := tx.Rollback(nCtx); err != nil {
+			if err = tx.Rollback(nCtx); err != nil {
 				log.Error().Err(err).Msg("Failed rollback transaction")
 			}
 		}()
@@ -99,7 +99,7 @@ func (s *PgRepository) GetMetric(ctx context.Context, mType, mName string) (metr
 	row := s.DB.QueryRow(nCtx, sqlGetMetricQuery, mName, mType)
 
 	err = s.retryOperation(func() error {
-		err := row.Scan(&m.ID, &m.MType, &m.Value)
+		err = row.Scan(&m.ID, &m.MType, &m.Value)
 		return err
 	})
 
@@ -117,9 +117,9 @@ func (s *PgRepository) GetAllMetrics(ctx context.Context) (metrics []entities.Me
 
 	var rows pgx.Rows
 	err = s.retryOperation(func() error {
-		tRows, err := s.DB.Query(nCtx, sqlGetAllMetricsQuery)
+		tRows, e := s.DB.Query(nCtx, sqlGetAllMetricsQuery)
 		rows = tRows
-		return err
+		return e
 	})
 	if err != nil {
 		return []entities.MetricInternal{}, err
@@ -161,15 +161,15 @@ func isRetriableError(err error) bool {
 	return false
 }
 
-func migrate(db *pgxpool.Pool) (err error) {
+func migrate(db *pgxpool.Pool) error {
 	ctx := context.Background()
 	tx, err := db.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed rollback transaction")
+		if e := tx.Rollback(ctx); e != nil {
+			log.Error().Err(e).Msg("Failed rollback transaction")
 		}
 	}()
 
