@@ -2,6 +2,7 @@
 package controllers
 
 import (
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"net/http"
@@ -21,12 +22,15 @@ type AppHandler struct {
 }
 
 // NewHandler adds needed routers and middleware to our gin engine
-func NewHandler(router *gin.Engine, service *services.Service, hashKey string) {
+func NewHandler(router *gin.Engine, service *services.Service, hashKey string, certKey *rsa.PrivateKey) {
 	handler := AppHandler{Service: service}
 
 	appRoutes := router.Group("/")
 	appRoutes.Use(middleware.LoggerMiddleware(), gin.Recovery())
 	appRoutes.Use(middleware.GzipMiddleware())
+	if certKey != nil {
+		appRoutes.Use(middleware.CryptoMiddleware(certKey))
+	}
 	if hashKey != "" {
 		appRoutes.Use(middleware.HashSumMiddleware(hashKey))
 	}

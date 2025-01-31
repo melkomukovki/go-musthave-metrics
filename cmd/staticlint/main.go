@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/melkomukovki/go-musthave-metrics/internal/customanalyzers"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/multichecker"
 	"golang.org/x/tools/go/analysis/passes/bools"
@@ -12,10 +11,12 @@ import (
 	"honnef.co/go/tools/simple"
 	"honnef.co/go/tools/staticcheck"
 	"honnef.co/go/tools/stylecheck"
+
+	"github.com/melkomukovki/go-musthave-metrics/internal/customanalyzers"
 )
 
 func main() {
-	var analyzers []*analysis.Analyzer
+	analyzers := make([]*analysis.Analyzer, 10)
 
 	analyzers = append(analyzers, shadow.Analyzer, bools.Analyzer, defers.Analyzer, nilness.Analyzer)
 

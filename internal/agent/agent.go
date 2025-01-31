@@ -4,11 +4,14 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/hmac"
+	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/melkomukovki/go-musthave-metrics/internal/utils"
 	"github.com/rs/zerolog/log"
 	"math/rand/v2"
 	"os"
@@ -18,33 +21,44 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
-
 	"github.com/go-resty/resty/v2"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
 
 	"github.com/melkomukovki/go-musthave-metrics/internal/agent/config"
+	"github.com/melkomukovki/go-musthave-metrics/internal/entities"
 )
 
 // Agent описывает структуру агента по сбору и отправке метрик
 type Agent struct {
-	mu          sync.Mutex
-	pollCounter int64
-	metrics     []entities.Metric
-	config      *config.ClientConfig
-	workerPool  chan func()
+	mu              sync.Mutex
+	pollCounter     int64
+	metrics         []entities.Metric
+	config          *config.ClientConfig
+	workerPool      chan func()
+	cryptoPublicKey *rsa.PublicKey
 }
 
 // NewAgent функция для получения экземпляра агента
-func NewAgent(cfg *config.ClientConfig) *Agent {
+func NewAgent(cfg *config.ClientConfig) (*Agent, error) {
+	// init base struct
 	agent := &Agent{
 		config:     cfg,
 		workerPool: make(chan func(), cfg.RateLimit),
 	}
+
+	// if cert path provided, get cert
+	if cfg.CryptoKey != "" {
+		publicKey, err := utils.GetPublicKey(cfg.CryptoKey)
+		if err != nil {
+			return nil, err
+		}
+		agent.cryptoPublicKey = publicKey
+	}
+
 	agent.createWorkerPool()
 
-	return agent
+	return agent, nil
 }
 
 func (a *Agent) addPollCounter() {
@@ -177,34 +191,49 @@ func (a *Agent) reportMetrics(c *resty.Client) {
 			"Accept-Encoding":  "gzip",
 		}
 
-		mMarshaled, _ := json.Marshal(a.metrics)
+		mMarshaled, err := json.Marshal(a.metrics)
+		if err != nil {
+			log.Error().Err(err).Msg("Error marshalling metrics")
+			return
+		}
 		if a.config.HashKey != "" {
 			hashString := a.getHash(mMarshaled)
 			headers["HashSHA256"] = hashString
 		}
 
+		// encrypt message if certificate presents
+		if a.config.CryptoKey != "" {
+			mMarshaled, err = utils.Encrypt(mMarshaled, a.cryptoPublicKey)
+			if err != nil {
+				log.Error().Err(err).Msg("Error encrypting metrics")
+				return
+			}
+		}
+
 		compressedData, err := gzipData(mMarshaled)
 		if err != nil {
-			fmt.Printf("Error sending metrics. Error: %s\n", err.Error())
+			log.Error().Err(err).Msg("Error compressing metrics")
 			return
 		}
 
-		resp, err := c.R().
+		_, err = c.R().
 			SetBody(compressedData).
 			SetHeaders(headers).
 			Post(url)
 		if err != nil {
-			fmt.Printf("Error sending metrics. Detected error: %s\n", err.Error())
+			log.Error().Err(err).Msg("Error reporting metrics")
 			return
 		}
-		fmt.Printf("Metric was sended. Status code: %d\n", resp.StatusCode())
-		fmt.Println(resp.Header())
+		log.Info().Msg("Metric was sent")
 		a.resetPollCounter()
 	}
 }
 
 // Run - функция для запуска работы агента
 func (a *Agent) Run(cResty *resty.Client) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	pollTicker := time.NewTicker(time.Duration(a.config.PollInterval) * time.Second)
 	defer pollTicker.Stop()
 
@@ -212,7 +241,13 @@ func (a *Agent) Run(cResty *resty.Client) {
 	defer reportTicker.Stop()
 
 	sigsEnd := make(chan os.Signal, 1)
-	signal.Notify(sigsEnd, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigsEnd, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	go func() {
+		<-sigsEnd
+		log.Info().Msg("Received signal, shutting down")
+		cancel()
+	}()
 
 	// First-time poll and send metrics
 	a.pollMetrics()
@@ -221,8 +256,11 @@ func (a *Agent) Run(cResty *resty.Client) {
 	// And loop with timers
 	for {
 		select {
-		case <-sigsEnd:
+		case <-ctx.Done():
 			close(a.workerPool)
+			for task := range a.workerPool {
+				task()
+			}
 			return
 		case <-pollTicker.C:
 			a.pollMetrics()

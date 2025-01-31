@@ -26,7 +26,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	app := agent.NewAgent(&cfg)
+	app, err := agent.NewAgent(&cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	client := resty.New()
 	client.SetRetryCount(3).
