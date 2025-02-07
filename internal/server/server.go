@@ -53,7 +53,7 @@ func Run() {
 
 	router := gin.Default()
 	pprof.Register(router)
-	controllers.NewHandler(router, appService, cfg.HashKey, certKey)
+	controllers.NewHandler(router, appService, cfg.HashKey, certKey, cfg.TrustedSubnet)
 
 	srv := &http.Server{
 		Addr:    cfg.Address,

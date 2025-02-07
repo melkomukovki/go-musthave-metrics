@@ -31,7 +31,7 @@ func Example_run() {
 
 	// Create gin engine with routes
 	router := gin.Default()
-	controllers.NewHandler(router, appService, cfg.HashKey, cert)
+	controllers.NewHandler(router, appService, cfg.HashKey, cert, cfg.TrustedSubnet)
 
 	// Run server
 	if err := router.Run(cfg.Address); err != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/melkomukovki/go-musthave-metrics/internal/utils"
 	"github.com/rs/zerolog/log"
 	"math/rand/v2"
+	"net"
 	"os"
 	"os/signal"
 	"runtime"
@@ -37,6 +38,7 @@ type Agent struct {
 	config          *config.ClientConfig
 	workerPool      chan func()
 	cryptoPublicKey *rsa.PublicKey
+	ipAddress       string
 }
 
 // NewAgent функция для получения экземпляра агента
@@ -54,6 +56,13 @@ func NewAgent(cfg *config.ClientConfig) (*Agent, error) {
 			return nil, err
 		}
 		agent.cryptoPublicKey = publicKey
+	}
+
+	localIP, err := getLocalIPs()
+	if len(localIP) != 0 && err == nil {
+		agent.ipAddress = localIP[0]
+	} else {
+		log.Warn().Msg("Unable to determine local IP address")
 	}
 
 	agent.createWorkerPool()
@@ -191,6 +200,10 @@ func (a *Agent) reportMetrics(c *resty.Client) {
 			"Accept-Encoding":  "gzip",
 		}
 
+		if a.ipAddress != "" {
+			headers["X-Real-IP"] = a.ipAddress
+		}
+
 		mMarshaled, err := json.Marshal(a.metrics)
 		if err != nil {
 			log.Error().Err(err).Msg("Error marshalling metrics")
@@ -216,6 +229,7 @@ func (a *Agent) reportMetrics(c *resty.Client) {
 			return
 		}
 
+		log.Debug().Msgf("Headers: %+v", headers)
 		_, err = c.R().
 			SetBody(compressedData).
 			SetHeaders(headers).
@@ -284,4 +298,21 @@ func gzipData(data []byte) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+func getLocalIPs() ([]string, error) {
+	var ips []string
+	addresses, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, addr := range addresses {
+		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
+			if ipNet.IP.To4() != nil {
+				ips = append(ips, ipNet.IP.String())
+			}
+		}
+	}
+	return ips, nil
 }
