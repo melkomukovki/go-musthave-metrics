@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "internal/proto";
+
+message Metric {
+  string id = 1;
+  string metric_type = 2;
+  sint64 delta = 3;
+  double value = 4;
+}
+
+message AddMetricRequest {
+  Metric metric = 1;
+}
+
+message AddMetricResponse {
+  string message = 1;
+}
+
+message AddMetricsRequest {
+  repeated Metric metrics = 1;
+}
+
+message AddMetricsResponse {
+  string message = 1;
+}
+
+message GetMetricRequest {
+  string id = 1;
+  string metric_type = 2;
+}
+
+message GetMetricResponse {
+  Metric metric = 1;
+}
+
+message PingRequest {}
+
+message PingResponse {
+  string message = 1;
+}
+
+message ListMetricsRequest {}
+
+message ListMetricsResponse {
+  repeated Metric metrics = 1;
+}
+
+
+service Metrics {
+  rpc AddMetric(AddMetricRequest) returns (AddMetricResponse);
+  rpc AddMetrics(AddMetricsRequest) returns (AddMetricsResponse);
+  rpc GetMetric(GetMetricRequest) returns (GetMetricResponse);
+  rpc Ping(PingRequest) returns (PingResponse);
+  rpc ListMetrics(ListMetricsRequest) returns (ListMetricsResponse);
+}

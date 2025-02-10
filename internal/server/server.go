@@ -8,11 +8,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/melkomukovki/go-musthave-metrics/internal/config"
 	"github.com/melkomukovki/go-musthave-metrics/internal/controllers"
+	"github.com/melkomukovki/go-musthave-metrics/internal/controllers/middleware"
+	pc "github.com/melkomukovki/go-musthave-metrics/internal/crypto"
 	"github.com/melkomukovki/go-musthave-metrics/internal/infra/memstorage"
 	"github.com/melkomukovki/go-musthave-metrics/internal/infra/postgres"
+	pb "github.com/melkomukovki/go-musthave-metrics/internal/proto"
 	"github.com/melkomukovki/go-musthave-metrics/internal/services"
-	"github.com/melkomukovki/go-musthave-metrics/internal/utils"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -30,7 +34,7 @@ func Run() {
 	// get certificate private key if certificate provided
 	var certKey *rsa.PrivateKey
 	if cfg.CryptoKey != "" {
-		certKey, err = utils.GetPrivateKey(cfg.CryptoKey)
+		certKey, err = pc.GetPrivateKey(cfg.CryptoKey)
 		if err != nil {
 			log.Fatal().Err(err).Msg("can't initialize crypto key")
 		}
@@ -66,6 +70,27 @@ func Run() {
 		}
 	}()
 
+	var grpcServer *grpc.Server
+	if cfg.GrpcAddress != "" {
+		go func() {
+			grpcServer = grpc.NewServer(
+				grpc.UnaryInterceptor(middleware.LoggerInterceptor),
+			)
+			grpcHandler := controllers.NewMetricsServer(appService)
+			pb.RegisterMetricsServer(grpcServer, grpcHandler)
+
+			lis, err := net.Listen("tcp", cfg.GrpcAddress)
+			if err != nil {
+				log.Fatal().Err(err).Msg("can't start grpc server")
+			}
+			log.Info().Str("address", cfg.GrpcAddress).Msg("grpc server started")
+
+			if err := grpcServer.Serve(lis); err != nil {
+				log.Fatal().Err(err).Msg("error while running gRPC server")
+			}
+		}()
+	}
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
@@ -76,6 +101,11 @@ func Run() {
 
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatal().Err(err).Msg("error while shutting down server")
+	}
+
+	if grpcServer != nil {
+		grpcServer.GracefulStop()
+		log.Info().Msg("grpc server stopped")
 	}
 
 	log.Info().Msg("server gracefully stopped")

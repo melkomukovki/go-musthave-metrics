@@ -2,19 +2,13 @@
 package agent
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
 	"crypto/hmac"
-	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"github.com/melkomukovki/go-musthave-metrics/internal/utils"
 	"github.com/rs/zerolog/log"
 	"math/rand/v2"
-	"net"
 	"os"
 	"os/signal"
 	"runtime"
@@ -22,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-resty/resty/v2"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
 
@@ -32,13 +25,12 @@ import (
 
 // Agent описывает структуру агента по сбору и отправке метрик
 type Agent struct {
-	mu              sync.Mutex
-	pollCounter     int64
-	metrics         []entities.Metric
-	config          *config.ClientConfig
-	workerPool      chan func()
-	cryptoPublicKey *rsa.PublicKey
-	ipAddress       string
+	mu          sync.Mutex
+	pollCounter int64
+	metrics     []entities.Metric
+	config      *config.ClientConfig
+	workerPool  chan func()
+	sender      MetricSender
 }
 
 // NewAgent функция для получения экземпляра агента
@@ -49,23 +41,25 @@ func NewAgent(cfg *config.ClientConfig) (*Agent, error) {
 		workerPool: make(chan func(), cfg.RateLimit),
 	}
 
-	// if cert path provided, get cert
-	if cfg.CryptoKey != "" {
-		publicKey, err := utils.GetPublicKey(cfg.CryptoKey)
+	agent.createWorkerPool()
+
+	if cfg.Transport == "grpc" {
+		grpcSender, err := NewGRPCMetricSender(cfg)
 		if err != nil {
 			return nil, err
 		}
-		agent.cryptoPublicKey = publicKey
-	}
-
-	localIP, err := getLocalIPs()
-	if len(localIP) != 0 && err == nil {
-		agent.ipAddress = localIP[0]
+		agent.sender = grpcSender
+		log.Info().Msg("Using gRPC sender")
+	} else if cfg.Transport == "rest" {
+		restSender, err := NewRestMetricSender(cfg)
+		if err != nil {
+			return nil, err
+		}
+		agent.sender = restSender
+		log.Info().Msg("Using REST sender")
 	} else {
-		log.Warn().Msg("Unable to determine local IP address")
+		log.Fatal().Msg("Unsupported transport parameter")
 	}
-
-	agent.createWorkerPool()
 
 	return agent, nil
 }
@@ -190,61 +184,19 @@ func (a *Agent) createWorkerPool() {
 	}
 }
 
-func (a *Agent) reportMetrics(c *resty.Client) {
+func (a *Agent) reportMetrics() {
 	a.workerPool <- func() {
-		url := fmt.Sprintf("http://%s/updates/", a.config.Address)
-
-		headers := map[string]string{
-			"Content-Type":     "application/json",
-			"Content-Encoding": "gzip",
-			"Accept-Encoding":  "gzip",
-		}
-
-		if a.ipAddress != "" {
-			headers["X-Real-IP"] = a.ipAddress
-		}
-
-		mMarshaled, err := json.Marshal(a.metrics)
-		if err != nil {
-			log.Error().Err(err).Msg("Error marshalling metrics")
-			return
-		}
-		if a.config.HashKey != "" {
-			hashString := a.getHash(mMarshaled)
-			headers["HashSHA256"] = hashString
-		}
-
-		// encrypt message if certificate presents
-		if a.config.CryptoKey != "" {
-			mMarshaled, err = utils.Encrypt(mMarshaled, a.cryptoPublicKey)
-			if err != nil {
-				log.Error().Err(err).Msg("Error encrypting metrics")
-				return
-			}
-		}
-
-		compressedData, err := gzipData(mMarshaled)
-		if err != nil {
-			log.Error().Err(err).Msg("Error compressing metrics")
-			return
-		}
-
-		log.Debug().Msgf("Headers: %+v", headers)
-		_, err = c.R().
-			SetBody(compressedData).
-			SetHeaders(headers).
-			Post(url)
-		if err != nil {
+		if err := a.sender.SendMetrics(a.metrics); err != nil {
 			log.Error().Err(err).Msg("Error reporting metrics")
-			return
+		} else {
+			log.Info().Msg("Metric was sent")
+			a.resetPollCounter()
 		}
-		log.Info().Msg("Metric was sent")
-		a.resetPollCounter()
 	}
 }
 
 // Run - функция для запуска работы агента
-func (a *Agent) Run(cResty *resty.Client) {
+func (a *Agent) Run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -265,7 +217,7 @@ func (a *Agent) Run(cResty *resty.Client) {
 
 	// First-time poll and send metrics
 	a.pollMetrics()
-	a.reportMetrics(cResty)
+	a.reportMetrics()
 
 	// And loop with timers
 	for {
@@ -279,40 +231,7 @@ func (a *Agent) Run(cResty *resty.Client) {
 		case <-pollTicker.C:
 			a.pollMetrics()
 		case <-reportTicker.C:
-			a.reportMetrics(cResty)
+			a.reportMetrics()
 		}
 	}
-}
-
-func gzipData(data []byte) ([]byte, error) {
-	var buf bytes.Buffer
-	gzipWriter := gzip.NewWriter(&buf)
-
-	_, err := gzipWriter.Write(data)
-	if err != nil {
-		return nil, err
-	}
-	err = gzipWriter.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
-}
-
-func getLocalIPs() ([]string, error) {
-	var ips []string
-	addresses, err := net.InterfaceAddrs()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, addr := range addresses {
-		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
-			if ipNet.IP.To4() != nil {
-				ips = append(ips, ipNet.IP.String())
-			}
-		}
-	}
-	return ips, nil
 }

@@ -15,6 +15,7 @@ import (
 // Default server config settings
 const (
 	DefaultAddress         = "localhost:8080" // Server address
+	DefaultGrpcAddress     = ""               // Grpc server address
 	DefaultStoreInterval   = 300              // Store interval in seconds
 	DefaultFileStoragePath = "metrics.json"   // Path to storage file
 	DefaultRestore         = true             // Restore metrics from file
@@ -28,6 +29,7 @@ const (
 // ServerConfig server config structure
 type ServerConfig struct {
 	Address         string `json:"address" env:"ADDRESS"`
+	GrpcAddress     string `json:"grpc_address" env:"GRPC_ADDRESS"`
 	StoreInterval   int    `json:"store_interval" env:"STORE_INTERVAL"`
 	FileStoragePath string `json:"file_storage_path" env:"FILE_STORAGE_PATH"`
 	Restore         bool   `json:"restore" env:"RESTORE"`
@@ -43,6 +45,7 @@ func GetServerConfig() (ServerConfig, error) {
 	var cfg ServerConfig
 
 	flag.StringVar(&cfg.Address, "a", DefaultAddress, "Server address and port")
+	flag.StringVar(&cfg.GrpcAddress, "g", DefaultGrpcAddress, "gRPC server address")
 	flag.IntVar(&cfg.StoreInterval, "i", DefaultStoreInterval, "Store interval")
 	flag.StringVar(&cfg.FileStoragePath, "f", DefaultFileStoragePath, "File with metrics")
 	flag.BoolVar(&cfg.Restore, "r", DefaultRestore, "Restore from file (bool)")
@@ -102,6 +105,10 @@ func GetServerConfig() (ServerConfig, error) {
 
 	if envTrustedSubnet := os.Getenv("TRUSTED_SUBNETS"); envTrustedSubnet != "" {
 		cfg.TrustedSubnet = envTrustedSubnet
+	}
+
+	if envGrpcAddress := os.Getenv("GRPC_ADDRESS"); envGrpcAddress != "" {
+		cfg.GrpcAddress = envGrpcAddress
 	}
 
 	// Validate file path and create if not exists
@@ -164,6 +171,9 @@ func loadConfigFromFile(path string) (ServerConfig, error) {
 func mergeConfig(cfg *ServerConfig, fileCfg ServerConfig) {
 	if cfg.Address == DefaultAddress && fileCfg.Address != "" {
 		cfg.Address = fileCfg.Address
+	}
+	if cfg.GrpcAddress == DefaultGrpcAddress && fileCfg.GrpcAddress != "" {
+		cfg.GrpcAddress = fileCfg.GrpcAddress
 	}
 	if cfg.StoreInterval == DefaultStoreInterval && fileCfg.StoreInterval != 0 {
 		cfg.StoreInterval = fileCfg.StoreInterval
