@@ -6,7 +6,7 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/melkomukovki/go-musthave-metrics/internal/utils"
+	pc "github.com/melkomukovki/go-musthave-metrics/internal/crypto"
 	"io"
 	"net/http"
 )
@@ -25,7 +25,7 @@ func CryptoMiddleware(key *rsa.PrivateKey) gin.HandlerFunc {
 			}
 
 			fmt.Println("before decrypt:", string(encBody))
-			decryptedBody, err := utils.Decrypt(encBody, key)
+			decryptedBody, err := pc.Decrypt(encBody, key)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"message": err.Error(),

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 // Default server config settings
 const (
 	DefaultAddress         = "localhost:8080" // Server address
+	DefaultGrpcAddress     = ""               // Grpc server address
 	DefaultStoreInterval   = 300              // Store interval in seconds
 	DefaultFileStoragePath = "metrics.json"   // Path to storage file
 	DefaultRestore         = true             // Restore metrics from file
@@ -21,11 +23,13 @@ const (
 	DefaultHashKey         = ""               // Secret string for hashing messages
 	DefaultCryptoKey       = ""               // Path to file with private key
 	DefaultConfigPath      = ""               // Path to json config file
+	DefaultTrustedSubnet   = ""               // Trusted subnet, block request from different subnets
 )
 
 // ServerConfig server config structure
 type ServerConfig struct {
 	Address         string `json:"address" env:"ADDRESS"`
+	GrpcAddress     string `json:"grpc_address" env:"GRPC_ADDRESS"`
 	StoreInterval   int    `json:"store_interval" env:"STORE_INTERVAL"`
 	FileStoragePath string `json:"file_storage_path" env:"FILE_STORAGE_PATH"`
 	Restore         bool   `json:"restore" env:"RESTORE"`
@@ -33,6 +37,7 @@ type ServerConfig struct {
 	HashKey         string `json:"key" env:"KEY"`
 	CryptoKey       string `json:"crypto_key" env:"CRYPTO_KEY"`
 	ConfigPath      string `env:"CONFIG"`
+	TrustedSubnet   string `json:"trusted_subnet" env:"TRUSTED_SUBNETS"`
 }
 
 // GetServerConfig allows to get instance of ServerConfig
@@ -40,6 +45,7 @@ func GetServerConfig() (ServerConfig, error) {
 	var cfg ServerConfig
 
 	flag.StringVar(&cfg.Address, "a", DefaultAddress, "Server address and port")
+	flag.StringVar(&cfg.GrpcAddress, "g", DefaultGrpcAddress, "gRPC server address")
 	flag.IntVar(&cfg.StoreInterval, "i", DefaultStoreInterval, "Store interval")
 	flag.StringVar(&cfg.FileStoragePath, "f", DefaultFileStoragePath, "File with metrics")
 	flag.BoolVar(&cfg.Restore, "r", DefaultRestore, "Restore from file (bool)")
@@ -47,6 +53,7 @@ func GetServerConfig() (ServerConfig, error) {
 	flag.StringVar(&cfg.HashKey, "k", DefaultHashKey, "Hash key for calculation HashSHA256 header")
 	flag.StringVar(&cfg.CryptoKey, "crypto-key", DefaultCryptoKey, "Path to private crypto key")
 	flag.StringVar(&cfg.ConfigPath, "c", DefaultConfigPath, "Configuration file path")
+	flag.StringVar(&cfg.TrustedSubnet, "t", DefaultTrustedSubnet, "Trusted subnet")
 	flag.Parse()
 
 	envConfigPath := os.Getenv("CONFIG")
@@ -96,6 +103,14 @@ func GetServerConfig() (ServerConfig, error) {
 		cfg.CryptoKey = envCryptoKey
 	}
 
+	if envTrustedSubnet := os.Getenv("TRUSTED_SUBNETS"); envTrustedSubnet != "" {
+		cfg.TrustedSubnet = envTrustedSubnet
+	}
+
+	if envGrpcAddress := os.Getenv("GRPC_ADDRESS"); envGrpcAddress != "" {
+		cfg.GrpcAddress = envGrpcAddress
+	}
+
 	// Validate file path and create if not exists
 	if cfg.DataSourceName != "" {
 		_, err := os.Stat(cfg.FileStoragePath)
@@ -116,6 +131,14 @@ func GetServerConfig() (ServerConfig, error) {
 	// Validate crypto key path and return err if not exists
 	if cfg.CryptoKey != "" {
 		_, err := os.Stat(cfg.CryptoKey)
+		if err != nil {
+			return ServerConfig{}, err
+		}
+	}
+
+	// Validate trusted subnet
+	if cfg.TrustedSubnet != "" {
+		_, _, err := net.ParseCIDR(cfg.TrustedSubnet)
 		if err != nil {
 			return ServerConfig{}, err
 		}
@@ -149,6 +172,9 @@ func mergeConfig(cfg *ServerConfig, fileCfg ServerConfig) {
 	if cfg.Address == DefaultAddress && fileCfg.Address != "" {
 		cfg.Address = fileCfg.Address
 	}
+	if cfg.GrpcAddress == DefaultGrpcAddress && fileCfg.GrpcAddress != "" {
+		cfg.GrpcAddress = fileCfg.GrpcAddress
+	}
 	if cfg.StoreInterval == DefaultStoreInterval && fileCfg.StoreInterval != 0 {
 		cfg.StoreInterval = fileCfg.StoreInterval
 	}
@@ -163,5 +189,8 @@ func mergeConfig(cfg *ServerConfig, fileCfg ServerConfig) {
 	}
 	if cfg.CryptoKey == DefaultCryptoKey && fileCfg.CryptoKey != "" {
 		cfg.CryptoKey = fileCfg.CryptoKey
+	}
+	if cfg.TrustedSubnet == DefaultTrustedSubnet && fileCfg.TrustedSubnet != "" {
+		cfg.TrustedSubnet = fileCfg.TrustedSubnet
 	}
 }

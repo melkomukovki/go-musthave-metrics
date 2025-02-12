@@ -1,6 +1,7 @@
 {
-  "address": "localhost:8080",
+  "address": "localhost:5566",
   "report_interval": 4,
   "poll_interval": 5,
-  "crypto_key": "cert.pem"
+  "crypto_key": "cert.pem",
+  "transport": "grpc"
 }

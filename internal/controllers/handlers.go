@@ -22,11 +22,14 @@ type AppHandler struct {
 }
 
 // NewHandler adds needed routers and middleware to our gin engine
-func NewHandler(router *gin.Engine, service *services.Service, hashKey string, certKey *rsa.PrivateKey) {
+func NewHandler(router *gin.Engine, service *services.Service, hashKey string, certKey *rsa.PrivateKey, subnet string) {
 	handler := AppHandler{Service: service}
 
 	appRoutes := router.Group("/")
 	appRoutes.Use(middleware.LoggerMiddleware(), gin.Recovery())
+	if subnet != "" {
+		appRoutes.Use(middleware.SubnetValidatorMiddleware(subnet))
+	}
 	appRoutes.Use(middleware.GzipMiddleware())
 	if certKey != nil {
 		appRoutes.Use(middleware.CryptoMiddleware(certKey))

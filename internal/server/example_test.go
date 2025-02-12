@@ -5,9 +5,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/melkomukovki/go-musthave-metrics/internal/config"
 	"github.com/melkomukovki/go-musthave-metrics/internal/controllers"
+	pc "github.com/melkomukovki/go-musthave-metrics/internal/crypto"
 	"github.com/melkomukovki/go-musthave-metrics/internal/infra/memstorage"
 	"github.com/melkomukovki/go-musthave-metrics/internal/services"
-	"github.com/melkomukovki/go-musthave-metrics/internal/utils"
 	"log"
 )
 
@@ -26,12 +26,12 @@ func Example_run() {
 	// Get certificate from file
 	var cert *rsa.PrivateKey
 	if cfg.CryptoKey != "" {
-		cert, _ = utils.GetPrivateKey(cfg.CryptoKey)
+		cert, _ = pc.GetPrivateKey(cfg.CryptoKey)
 	}
 
 	// Create gin engine with routes
 	router := gin.Default()
-	controllers.NewHandler(router, appService, cfg.HashKey, cert)
+	controllers.NewHandler(router, appService, cfg.HashKey, cert, cfg.TrustedSubnet)
 
 	// Run server
 	if err := router.Run(cfg.Address); err != nil {
